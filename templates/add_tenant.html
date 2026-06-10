@@ -1,103 +1,103 @@
 {% extends 'base.html' %}
 
 {% block content %}
-<div class="page-content active">
+  <div class="page-content active">
     <div class="card shadow-sm" style="max-width: 600px; margin: 0 auto; border-radius: 12px; border: none; background: var(--bg-primary);">
-        <div class="card-header" style="background: var(--bg-secondary); padding: 20px; border-bottom: 1px solid var(--border-color);">
-            <h2 style="margin: 0; font-family: 'Playfair Display', serif; font-size: 1.5rem;">👤 Add New Tenant</h2>
-            <p style="margin: 5px 0 0; font-size: 0.85rem; color: var(--text-secondary);">Create a profile and login credentials for your new resident.</p>
-        </div>
-        
-        <div class="card-body" style="padding: 30px;">
-            <form method="POST">
-                {% csrf_token %}
-                
-                {% for field in form %}
-                <div class="form-group" style="margin-bottom: 20px;">
-                    <label style="display:block; margin-bottom:8px; font-weight:600; font-size: 0.9rem; color: var(--text-primary);">
-                        {{ field.label }}
-                        {% if field.field.required %}
-                            <span style="color: #e74c3c;">*</span>
-                        {% else %}
-                            <span style="color: var(--text-secondary); font-size: 0.75rem; font-weight: 400; margin-left: 5px;">(Optional)</span>
-                        {% endif %}
-                    </label>
-                    <div class="custom-form-field">
-                        {{ field }}
-                    </div>
-                    {% if field.errors %}
-                        <div style="color: #e74c3c; font-size: 0.75rem; margin-top: 5px; font-weight: 600;">
-                            {{ field.errors|striptags }}
-                        </div>
-                    {% endif %}
-                </div>
-                {% endfor %}
+      <div class="card-header" style="background: var(--bg-secondary); padding: 20px; border-bottom: 1px solid var(--border-color);">
+        <h2 style="margin: 0; font-family: 'Playfair Display', serif; font-size: 1.5rem;">👤 Add New Tenant</h2>
+        <p style="margin: 5px 0 0; font-size: 0.85rem; color: var(--text-secondary);">Create a profile and login credentials for your new resident.</p>
+      </div>
 
-                <div style="background: rgba(52, 152, 219, 0.1); border-left: 4px solid #3498db; padding: 15px; border-radius: 6px; margin-bottom: 25px; margin-top: 10px;">
-                    <p style="margin: 0; font-size: 0.85rem; color: var(--text-primary); line-height: 1.4;">
-                        <strong>🔑 Auto-Password:</strong> The tenant's <strong>phone number</strong> will be set as their initial password. 
-                        <br>
-                        <strong>📊 Billing Ledger:</strong> Their balance will be calculated starting from the <strong>Move-in Date</strong> selected above.
-                    </p>
-                </div>
+      <div class="card-body" style="padding: 30px;">
+        <form method="POST">
+          {% csrf_token %}
 
-                <div style="display: flex; gap: 12px;">
-                    <button type="submit" class="btn btn-primary" style="flex: 2; padding: 12px; font-weight: 700; border-radius: 8px; border: none; background: #3498db; color: white; cursor: pointer;">
-                        Save Tenant
-                    </button>
-                    <a href="{% url 'tenants' %}" class="btn btn-secondary" style="flex: 1; text-decoration:none; text-align: center; padding: 12px; border-radius: 8px; background: var(--bg-secondary); color: var(--text-primary); border: 1px solid var(--border-color);">
-                        Cancel
-                    </a>
-                </div>
-            </form>
-        </div>
+          {% if form.non_field_errors %}
+            <div style="background: rgba(231, 76, 60, 0.1); border-left: 4px solid #e74c3c; padding: 15px; border-radius: 6px; margin-bottom: 20px;">
+              {% for error in form.non_field_errors %}
+                <p style="color: #e74c3c; margin: 0; font-size: 0.9rem; font-weight: 600;">⚠️ {{ error }}</p>
+              {% endfor %}
+            </div>
+          {% endif %}
+
+          {% for field in form %}
+            <div class="form-group" style="margin-bottom: 20px;">
+              <label style="display:block; margin-bottom:8px; font-weight:600; font-size: 0.9rem; color: var(--text-primary);">
+                {{ field.label }}
+                {% if field.field.required %}
+                  <span style="color: #e74c3c;">*</span>
+                {% else %}
+                  <span style="color: var(--text-secondary); font-size: 0.75rem; font-weight: 400; margin-left: 5px;">(Optional)</span>
+                {% endif %}
+              </label>
+              <div class="custom-form-field">{{ field }}</div>
+              {% if field.errors %}
+                <div style="color: #e74c3c; font-size: 0.75rem; margin-top: 5px; font-weight: 600;">{{ field.errors|striptags }}</div>
+              {% endif %}
+            </div>
+          {% endfor %}
+
+          <div style="background: rgba(52, 152, 219, 0.1); border-left: 4px solid #3498db; padding: 15px; border-radius: 6px; margin-bottom: 25px; margin-top: 10px;">
+            <p style="margin: 0; font-size: 0.85rem; color: var(--text-primary); line-height: 1.4;">
+              <strong>🔑 Auto-Password:</strong> The tenant's <strong>phone number</strong> will be set as their initial password.
+              <br />
+              <strong>📊 Billing Ledger:</strong> Their balance will be calculated starting from the <strong>Move-in Date</strong> selected above.
+            </p>
+          </div>
+
+          <div style="display: flex; gap: 12px;">
+            <button type="submit" class="btn btn-primary" style="flex: 2; padding: 12px; font-weight: 700; border-radius: 8px; border: none; background: #3498db; color: white; cursor: pointer;">Save Tenant</button>
+            <a href="{% url 'tenants' %}" class="btn btn-secondary" style="flex: 1; text-decoration:none; text-align: center; padding: 12px; border-radius: 8px; background: var(--bg-secondary); color: var(--text-primary); border: 1px solid var(--border-color);">Cancel</a>
+          </div>
+        </form>
+      </div>
     </div>
-</div>
+  </div>
 
-<style>
+  <style>
     /* Clean Dark Mode Styling for Form Elements */
-    .custom-form-field input, 
-    .custom-form-field select, 
+    .custom-form-field input,
+    .custom-form-field select,
     .custom-form-field textarea {
-        width: 100%;
-        padding: 12px;
-        border-radius: 8px;
-        border: 1px solid var(--border-color);
-        background: var(--bg-secondary) !important;
-        color: var(--text-primary) !important;
-        font-family: inherit;
-        font-size: 0.95rem;
-        box-sizing: border-box;
-        transition: border-color 0.2s;
-        appearance: none;
-        -webkit-appearance: none;
+      width: 100%;
+      padding: 12px;
+      border-radius: 8px;
+      border: 1px solid var(--border-color);
+      background: var(--bg-secondary) !important;
+      color: var(--text-primary) !important;
+      font-family: inherit;
+      font-size: 0.95rem;
+      box-sizing: border-box;
+      transition: border-color 0.2s;
+      appearance: none;
+      -webkit-appearance: none;
     }
-
+    
     /* Fixed white select options for dark mode */
     .custom-form-field select option {
-        background-color: #1a1a1a; 
-        color: white;
+      background-color: #1a1a1a;
+      color: white;
     }
-
+    
     /* Custom dropdown arrow to match theme */
     .custom-form-field select {
-        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%23ffffff' viewBox='0 0 16 16'%3E%3Cpath d='M7.247 11.14 2.451 5.658C1.885 5.013 2.345 4 3.204 4h9.592a1 1 0 0 1 .753 1.659l-4.796 5.48a1 1 0 0 1-1.506 0z'/%3E%3C/svg%3E");
-        background-repeat: no-repeat;
-        background-position: calc(100% - 15px) center;
-        padding-right: 40px;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%23ffffff' viewBox='0 0 16 16'%3E%3Cpath d='M7.247 11.14 2.451 5.658C1.885 5.013 2.345 4 3.204 4h9.592a1 1 0 0 1 .753 1.659l-4.796 5.48a1 1 0 0 1-1.506 0z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: calc(100% - 15px) center;
+      padding-right: 40px;
     }
-
-    .custom-form-field input:focus, 
+    
+    .custom-form-field input:focus,
     .custom-form-field select:focus {
-        border-color: #3498db;
-        outline: none;
-        background: rgba(255,255,255,0.05) !important;
+      border-color: #3498db;
+      outline: none;
+      background: rgba(255, 255, 255, 0.05) !important;
     }
-
+    
     /* Support for Date Input visibility in Dark Mode */
-    [data-theme="dark"] input[type="date"]::-webkit-calendar-picker-indicator {
-        filter: invert(1);
-        cursor: pointer;
+    [data-theme='dark'] input[type='date']::-webkit-calendar-picker-indicator {
+      filter: invert(1);
+      cursor: pointer;
     }
-</style>
+  </style>
 {% endblock %}

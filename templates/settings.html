@@ -60,7 +60,7 @@
                             <span class="toggle-password" 
                                   onclick="togglePassword('id_{{ field.name }}', this)"
                                   style="position: absolute; right: 12px; cursor: pointer; opacity: 0.6; font-size: 14px; user-select: none;">
-                                👁️
+                                <i class="fa-regular fa-eye"></i>
                             </span>
                         </div>
 
@@ -80,13 +80,13 @@
             </div>
             <div class="card-body">
                 <div class="theme-toggle-container" style="display: flex; align-items: center; gap: 10px;">
-                    <span class="theme-icon">🌙</span>
+                    <span class="theme-icon"><i class="fa-solid fa-moon"></i></span>
                     <span class="theme-toggle-label" style="font-weight: 600;">Dark Mode</span>
                     <label class="theme-toggle-switch">
                         <input type="checkbox" id="themeToggle">
                         <span class="theme-slider"></span>
                     </label>
-                    <span class="theme-icon">☀️</span>
+                    <span class="theme-icon"><i class="fa-solid fa-sun" style="color: #f1c40f;"></i></span>
                 </div>
                 <p style="font-size:13px; color:var(--text-secondary); margin-top: 15px;">
                     Toggle between light and dark themes for comfortable viewing.
@@ -103,7 +103,6 @@ document.addEventListener('DOMContentLoaded', function() {
     const html = document.documentElement;
 
     // 1. SYNC: Set toggle position based on current state of the <html> tag
-    // If NOT dark, then it must be light.
     const isDark = html.getAttribute('data-theme') === 'dark';
     themeToggle.checked = !isDark; 
 
@@ -122,34 +121,39 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 
-    // 3. UI HELPER: Sync the Top Bar button text
+    // 3. UI HELPER: Sync the Top Bar button text and Font Awesome Icon
     function updateHeaderUI(theme) {
         const headerBtnText = document.getElementById('darkModeText');
         const headerBtnIcon = document.getElementById('darkModeIcon');
         
         if (headerBtnText && headerBtnIcon) {
             if (theme === 'light') {
-                headerBtnText.textContent = 'Dark Mode'; // Label shows what happens NEXT
-                headerBtnIcon.textContent = '🌙';
+                headerBtnText.textContent = 'Dark Mode';
+                headerBtnIcon.innerHTML = '<i class="fa-solid fa-moon"></i>';
             } else {
                 headerBtnText.textContent = 'Light Mode';
-                headerBtnIcon.textContent = '☀️';
+                headerBtnIcon.innerHTML = '<i class="fa-solid fa-sun" style="color: #f1c40f;"></i>';
             }
         }
     }
 });
 
-// Existing password toggle logic
-function togglePassword(inputId, iconElement) {
+// Updated password toggle logic for Font Awesome
+function togglePassword(inputId, spanElement) {
     const input = document.getElementById(inputId);
+    const icon = spanElement.querySelector('i'); // Target the <i> tag inside the span
+    
     if (input.type === "password") {
         input.type = "text";
-        iconElement.textContent = "🙈";
+        // Swap to eye-slash
+        icon.classList.remove('fa-eye');
+        icon.classList.add('fa-eye-slash');
     } else {
         input.type = "password";
-        iconElement.textContent = "👁️";
+        // Swap back to eye
+        icon.classList.remove('fa-eye-slash');
+        icon.classList.add('fa-eye');
     }
 }
-
 </script>
 {% endblock %}

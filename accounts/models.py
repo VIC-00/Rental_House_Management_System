@@ -66,6 +66,22 @@ class Property(models.Model):
 # --- 3. TENANCY & FINANCIALS ---
 # ==============================================================================
 
+
+class RentCharge(models.Model):
+    # ⭐ THE FIX: Use 'Tenant' as a string to avoid NameError
+    tenant = models.ForeignKey(
+        'Tenant', 
+        on_delete=models.CASCADE,
+        related_name='rent_charges' # Good practice to name the relationship
+    )
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    month = models.IntegerField()
+    year = models.IntegerField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('tenant', 'month', 'year')
+
 class Tenant(models.Model):
     STATUS_CHOICES = [
         ('pending', 'Pending Approval'),
@@ -73,6 +89,7 @@ class Tenant(models.Model):
         ('notice_given', 'Notice Given'),
         ('approved', 'Move-out Approved'),
         ('moved_out', 'Moved Out'),
+        ('expired', 'Lease Expired'),
     ]
 
     # --- 👤 Core Identity ---
@@ -106,6 +123,7 @@ class Tenant(models.Model):
         decimal_places=2, 
         default=0
     )
+    initial_rent_charged = models.BooleanField(default=False)
     
     # --- 📅 Timeline ---
     move_in_date = models.DateField(default=timezone.now) 
@@ -135,33 +153,113 @@ class Tenant(models.Model):
 
     def update_balance(self):
         """
-        Calculates balance based on total time lived (from move_in_date) vs total paid.
+        Accounting Ledger: Sums all actual RentCharge records, 
+        then subtracts Confirmed Payments. (Maintenance removed - handled as Landlord Expense).
         """
-        start_date = self.move_in_date
-        today = timezone.now().date()
-        
-        # 1. Calculation for total months inclusive of current month
-        # Logic: (Years * 12) + Months + 1
-        months_active = (today.year - start_date.year) * 12 + (today.month - start_date.month) + 1
-        
-        # Ensure we don't bill for future start dates
-        if months_active < 0:
-            months_active = 0
-        
-        # 2. Calculate Total Debt
-        rent = Decimal(str(self.rent_amount))
-        total_rent_due = rent * months_active
-        
-        # 3. Calculate Total Paid (Only 'confirmed' payments)
-        total_paid_data = self.payment_set.filter(status='confirmed').aggregate(
-            total=Sum('amount')
-        )['total'] or 0
-        
-        paid = Decimal(str(total_paid_data))
+        from django.db.models import Sum
+        from decimal import Decimal
 
-        # 4. Final Balance Calculation (Arrears are positive, Credits are negative)
-        self.balance = total_rent_due - paid
-        self.save()
+        # 1. Total Rent Due
+        total_rent_data = self.rent_charges.aggregate(
+            total=Sum('amount'))['total'] or 0
+        total_rent_due = Decimal(str(total_rent_data))
+
+        # 2. Total Paid (Only 'confirmed' payments)
+        total_paid_data = self.payment_set.filter(status='confirmed').aggregate(
+            total=Sum('amount'))['total'] or 0
+        total_paid = Decimal(str(total_paid_data))
+
+        # 3. Final Balance Calculation (Strictly Rent vs Paid)
+        self.balance = total_rent_due - total_paid
+        
+        # Save the result using the recursion safety lock
+        self.save(update_fields=['balance'])
+
+    def save(self, *args, **kwargs):
+        """
+        Overridden Save Method: Focuses strictly on financial ledger integrity.
+        Instantly calculates pro-rata rent upon creation or updates it upon edits.
+        """
+        # 1. SAFETY CHECK: Avoid infinite recursion loop from update_balance()
+        if kwargs.get('update_fields') == ['balance']:
+            super().save(*args, **kwargs)
+            return
+
+        is_creation = self.pk is None
+        rent_or_date_changed = False
+        old_move_in = None
+
+        if not is_creation:
+            # Grab the old records from the DB before saving edit changes
+            old_instance = Tenant.objects.get(pk=self.pk)
+            if (old_instance.rent_amount != self.rent_amount) or (old_instance.move_in_date != self.move_in_date):
+                rent_or_date_changed = True
+                old_move_in = old_instance.move_in_date
+
+        # 2. Save primary tenant details to the database first
+        super().save(*args, **kwargs)
+
+        import calendar
+        from decimal import Decimal
+
+        # ==========================================
+        # 📊 CASE A: NEW TENANT LEDGER INITIALIZATION
+        # ==========================================
+        if is_creation:
+            if not self.initial_rent_charged:
+                # Calculate remaining days in their move-in month
+                days_in_month = calendar.monthrange(self.move_in_date.year, self.move_in_date.month)[1]
+                days_stayed = (days_in_month - self.move_in_date.day) + 1
+                
+                if days_stayed > 0:
+                    daily_rate = Decimal(str(self.rent_amount)) / Decimal(days_in_month)
+                    amount_to_charge = (daily_rate * Decimal(days_stayed)).quantize(Decimal('1.00'))
+                    
+                    # Instantly create the opening ledger record
+                    RentCharge.objects.create(
+                        tenant=self,
+                        amount=amount_to_charge,
+                        month=self.move_in_date.month,
+                        year=self.move_in_date.year
+                    )
+                    
+                    # Lock the initial charge flag so the script doesn't double bill them
+                    self.initial_rent_charged = True
+                    self.save(update_fields=['initial_rent_charged'])
+
+            # Calculate and cache their starting profile balance right away
+            self.update_balance()
+
+        # ==========================================
+        # 🔄 CASE B: EDITING AN EXISTING TENANT'S LEDGER
+        # ==========================================
+        elif rent_or_date_changed:
+            days_in_month = calendar.monthrange(self.move_in_date.year, self.move_in_date.month)[1]
+            days_stayed = (days_in_month - self.move_in_date.day) + 1
+
+            # Find their original initial month charge
+            initial_charge = self.rent_charges.filter(
+                month=old_move_in.month,
+                year=old_move_in.year
+            ).first()
+
+            if initial_charge and days_stayed > 0:
+                # Sync the initial pro-rated invoice to the new rate and dates
+                daily_rate = Decimal(str(self.rent_amount)) / Decimal(days_in_month)
+                initial_charge.amount = (daily_rate * Decimal(days_stayed)).quantize(Decimal('1.00'))
+                initial_charge.month = self.move_in_date.month
+                initial_charge.year = self.move_in_date.year
+                initial_charge.save()
+
+            # Mass update all OTHER monthly charges to the new rent rate
+            other_charges = self.rent_charges.all()
+            if initial_charge:
+                other_charges = other_charges.exclude(pk=initial_charge.pk)
+            
+            other_charges.update(amount=Decimal(str(self.rent_amount)))
+
+            # Sync calculations across the cached profile row
+            self.update_balance()
 
 class Payment(models.Model):
     STATUS_CHOICES = (('confirmed', 'Confirmed'), ('pending', 'Pending'), ('failed', 'Failed'))
@@ -174,7 +272,7 @@ class Payment(models.Model):
     ]
 
     tenant = models.ForeignKey(Tenant, on_delete=models.CASCADE)
-    transaction_id = models.CharField(max_length=50, unique=True, null=True)
+    transaction_id = models.CharField(max_length=50, unique=True, null=True, blank=True, help_text="M-Pesa Code or Bank Reference")
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     date = models.DateTimeField(auto_now_add=True)
     
@@ -224,8 +322,9 @@ class MaintenanceRequest(models.Model):
     issue = models.CharField(max_length=200)
     
     # ⭐ NEW: Operational Tracking
-    category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, default='other')
+    category = models.CharField(max_length=20, choices=CATEGORY_CHOICES, default='other', null=True, blank=True)
     cost = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    
     
     description = models.TextField()
     tech_notes = models.TextField(null=True, blank=True)
@@ -262,6 +361,7 @@ class Announcement(models.Model):
         on_delete=models.CASCADE,
         related_name='announcements'
     )
+    # The specific property (kept as optional)
     target_property = models.ForeignKey(
         'Property', 
         on_delete=models.CASCADE, 
@@ -269,8 +369,22 @@ class Announcement(models.Model):
         blank=True,
         related_name='property_announcements'
     )
+    
+    # ⭐ THE FIX: Add this explicit broadcast field
+    is_broadcast = models.BooleanField(
+        default=False, 
+        help_text="If checked, this announcement will show for all your properties."
+    )
+    
     date_posted = models.DateTimeField(auto_now_add=True)
     is_active = models.BooleanField(default=True)
+
+    def save(self, *args, **kwargs):
+        if not self.target_property:
+            self.is_broadcast = True
+        else:
+            self.is_broadcast = False
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return self.title

@@ -1,79 +1,77 @@
 {% extends 'base.html' %}
 
 {% block content %}
-<div class="page-content active">
+  <div class="page-content active">
     <div class="card" style="max-width: 600px; margin: 0 auto; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.08);">
-        <div class="card-header" style="padding: 25px; border-bottom: 1px solid var(--border-color);">
-            <h2 style="margin: 0; font-family: 'Playfair Display', serif;">
-                {% if edit_mode %}
-                    🛠️ Update Request #MNT-{{ form.instance.id }}
-                {% else %}
-                    🔧 New Maintenance Request
-                {% endif %}
-            </h2>
-            <p class="text-muted" style="font-size: 0.85rem; margin-top: 5px;">
-                Complete the details below to track repairs and expenses.
+      <div class="card-header" style="padding: 25px; border-bottom: 1px solid var(--border-color);">
+        <h2 style="margin: 0; font-family: 'Playfair Display', serif;">
+          {% if edit_mode %}
+            🛠️ Update Request #MNT-{{ form.instance.id }}
+          {% else %}
+            🔧 New Maintenance Request
+          {% endif %}
+        </h2>
+        <p class="text-muted" style="font-size: 0.85rem; margin-top: 5px;">Complete the details below to track repairs and expenses.</p>
+      </div>
+      <div class="card-body" style="padding: 30px;">
+        <form method="POST">
+          {% csrf_token %}
+
+          {% for field in form %}
+            <div class="form-group" style="margin-bottom: 20px;">
+              <label style="font-weight:700; display: block; margin-bottom: 8px; font-size: 0.9rem; color: var(--text-primary);">{{ field.label }}</label>
+
+              {{ field }}
+
+              {% if field.help_text %}
+                <small style="color: var(--text-secondary); display: block; margin-top: 5px;">{{ field.help_text }}</small>
+              {% endif %}
+
+              {% if field.errors %}
+                <small style="color: #e74c3c; display: block; margin-top: 5px; font-weight: 600;">{{ field.errors.0 }}</small>
+              {% endif %}
+            </div>
+          {% endfor %}
+
+          <div style="background: rgba(52, 152, 219, 0.05); border-left: 4px solid #3498db; padding: 15px; border-radius: 8px; margin-bottom: 25px;">
+            <p style="margin: 0; font-size: 0.8rem; color: var(--text-primary); line-height: 1.4;">
+              <strong>Intelligence Tip:</strong> Correctly categorizing repairs and entering the final <strong>Cost</strong> helps generate your Expense Leak reports.
             </p>
-        </div>
-        <div class="card-body" style="padding: 30px;">
-            <form method="POST">
-                {% csrf_token %}
-                
-                {% for field in form %}
-                <div class="form-group" style="margin-bottom: 20px;">
-                    <label style="font-weight:700; display: block; margin-bottom: 8px; font-size: 0.9rem; color: var(--text-primary);">
-                        {{ field.label }}
-                    </label>
-                    
-                    {{ field }}
-                    
-                    {% if field.help_text %}
-                        <small style="color: var(--text-secondary); display: block; margin-top: 5px;">{{ field.help_text }}</small>
-                    {% endif %}
-                    
-                    {% if field.errors %}
-                        <small style="color: #e74c3c; display: block; margin-top: 5px; font-weight: 600;">{{ field.errors.0 }}</small>
-                    {% endif %}
-                </div>
-                {% endfor %}
+          </div>
 
-                <div style="background: rgba(52, 152, 219, 0.05); border-left: 4px solid #3498db; padding: 15px; border-radius: 8px; margin-bottom: 25px;">
-                    <p style="margin: 0; font-size: 0.8rem; color: var(--text-primary); line-height: 1.4;">
-                        <strong>Intelligence Tip:</strong> Correctly categorizing repairs and entering the final <strong>Cost</strong> helps generate your Expense Leak reports.
-                    </p>
-                </div>
-
-                <div style="display: flex; gap: 12px; margin-top: 25px;">
-                    <button type="submit" class="btn btn-primary" style="flex: 2; font-weight: 700;">
-                        {% if edit_mode %}Save Changes{% else %}Create Request{% endif %}
-                    </button>
-                    <a href="{% url 'maintenance' %}" class="btn btn-secondary" style="flex: 1; text-decoration:none; text-align: center; display: flex; align-items: center; justify-content: center;">
-                        Cancel
-                    </a>
-                </div>
-            </form>
-        </div>
+          <div style="display: flex; gap: 12px; margin-top: 25px;">
+            <button type="submit" class="btn btn-primary" style="flex: 2; font-weight: 700;">
+              {% if edit_mode %}
+                Save Changes
+              {% else %}
+                Create Request
+              {% endif %}
+            </button>
+            <a href="{% url 'maintenance' %}" class="btn btn-secondary" style="flex: 1; text-decoration:none; text-align: center; display: flex; align-items: center; justify-content: center;">Cancel</a>
+          </div>
+        </form>
+      </div>
     </div>
-</div>
+  </div>
 
-<style>
+  <style>
     /* Ensures fields inherit our global theme styles even if generated by Django */
-    .form-group input, 
-    .form-group select, 
+    .form-group input,
+    .form-group select,
     .form-group textarea {
-        width: 100%;
-        padding: 12px;
-        border-radius: 8px;
-        border: 1px solid var(--border-color);
-        background: var(--bg-primary);
-        color: var(--text-primary);
-        font-family: inherit;
-        transition: border-color 0.2s;
+      width: 100%;
+      padding: 12px;
+      border-radius: 8px;
+      border: 1px solid var(--border-color);
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      font-family: inherit;
+      transition: border-color 0.2s;
     }
-    .form-group input:focus, 
+    .form-group input:focus,
     .form-group select:focus {
-        border-color: #3498db;
-        outline: none;
+      border-color: #3498db;
+      outline: none;
     }
-</style>
+  </style>
 {% endblock %}

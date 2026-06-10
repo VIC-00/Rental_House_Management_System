@@ -36,7 +36,15 @@
                     <label style="font-size: 0.65rem; font-weight: 800; text-transform: uppercase; color: var(--text-secondary); margin-bottom: 4px; margin-left: 2px;">Billing Month</label>
                     <select name="billing_month" onchange="this.form.submit()" style="padding:7px 12px; border:1px solid var(--border-color); border-radius:6px; background: var(--bg-secondary); color: var(--text-primary); font-size: 0.85rem;">
                         <option value="">All Periods</option>
-                        {% for i in "123456789"|make_list %}<option value="{{ forloop.counter }}" {% if request.GET.billing_month == forloop.counter|stringformat:"i" %}selected{% endif %}>{{ forloop.counter|date:"F" }}</option>{% endfor %}
+                        <option value="1" {% if request.GET.billing_month == "1" %}selected{% endif %}>January</option>
+                        <option value="2" {% if request.GET.billing_month == "2" %}selected{% endif %}>February</option>
+                        <option value="3" {% if request.GET.billing_month == "3" %}selected{% endif %}>March</option>
+                        <option value="4" {% if request.GET.billing_month == "4" %}selected{% endif %}>April</option>
+                        <option value="5" {% if request.GET.billing_month == "5" %}selected{% endif %}>May</option>
+                        <option value="6" {% if request.GET.billing_month == "6" %}selected{% endif %}>June</option>
+                        <option value="7" {% if request.GET.billing_month == "7" %}selected{% endif %}>July</option>
+                        <option value="8" {% if request.GET.billing_month == "8" %}selected{% endif %}>August</option>
+                        <option value="9" {% if request.GET.billing_month == "9" %}selected{% endif %}>September</option>
                         <option value="10" {% if request.GET.billing_month == "10" %}selected{% endif %}>October</option>
                         <option value="11" {% if request.GET.billing_month == "11" %}selected{% endif %}>November</option>
                         <option value="12" {% if request.GET.billing_month == "12" %}selected{% endif %}>December</option>
@@ -120,4 +128,6 @@
         </div>
     </div>
 </div>
+
+
 {% endblock %}

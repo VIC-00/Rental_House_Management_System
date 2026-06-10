@@ -1,5 +1,6 @@
 from django.urls import path
 from . import views
+from django.contrib.auth import views as auth_views
 
 urlpatterns = [
     # ==========================================================================
@@ -11,6 +12,29 @@ urlpatterns = [
     path('settings/', views.settings_view, name='settings'),
     path('profile/settings/', views.profile_settings, name='profile_settings'),
     path('change-password/', views.change_password, name='change_password'),
+    #Password Reset
+    # 1. Page to submit email
+    path('reset_password/', auth_views.PasswordResetView.as_view(
+        template_name="password_reset.html",
+        email_template_name="password_reset_email.txt"
+    ), name="reset_password"),
+
+    # 2. Success message after submitting email
+    path('reset_password_sent/', auth_views.PasswordResetDoneView.as_view(
+        template_name="password_reset_sent.html"
+    ), name="password_reset_done"),
+
+    # 3. The actual link sent to the email
+    path('reset/<uidb64>/<token>/', auth_views.PasswordResetConfirmView.as_view(
+        template_name="password_reset_form.html"
+    ), name="password_reset_confirm"),
+
+    # 4. Final success message
+    path('reset_password_complete/', auth_views.PasswordResetCompleteView.as_view(
+        template_name="password_reset_done.html"
+    ), name="password_reset_complete"),
+    
+    
     # ==========================================================================
     # --- 2. PROPERTY MANAGEMENT ---
     # ==========================================================================

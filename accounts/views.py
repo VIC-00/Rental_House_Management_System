@@ -1,22 +1,24 @@
 import csv
 import json
+import datetime 
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth import authenticate, login, logout,update_session_auth_hash
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib import messages
 from django.contrib.auth.hashers import check_password
 from django.contrib.auth.forms import PasswordChangeForm
-from django.db.models import Sum, Count, Q, Avg, F
+from django.db.models import Sum, Count, Q, Avg, F, ProtectedError
 from .models import Property, Tenant, Payment, MaintenanceRequest, CustomUser, SentMessage, Announcement
 from .forms import PropertyForm, AddTenantFullForm, UserSignupForm, PaymentForm, MaintenanceForm, TenantMaintenanceRequestForm, AnnouncementForm, MoveOutRequestForm, UserUpdateForm,TenantPaymentForm, MaintenanceTaskUpdateForm, MaintenanceAssignmentForm, AddStaffForm
 from django.urls import reverse
 from django.http import HttpResponse
 from django.core.mail import send_mail
+from django.conf import settings
 from django.utils import timezone
 from datetime import timedelta
-from django.db import IntegrityError
+from django.db import IntegrityError,transaction
 from decimal import Decimal, InvalidOperation
-import datetime 
+
 
 # ==============================================================================
 # --- 1. MASTER AUTHENTICATION & PROFILE SETTINGS ---
@@ -42,17 +44,27 @@ def login_view(request):
         if 'signup_submit' in request.POST:
             form = UserSignupForm(request.POST)
             if form.is_valid():
-                user = form.save(commit=False)
                 selected_role = request.POST.get('role_selection') 
                 
                 # 🏠 TENANT SIGNUP
                 if selected_role == 'tenant':
+                    property_id = request.POST.get('property_id')
+                    unit_number = request.POST.get('unit_number')
+                    if not property_id or not unit_number:
+                        messages.error(request, "Property Name and Unit Number are required for Tenant registration.")
+                        return render(request, 'login.html', {
+                            'form': form,
+                            'properties': Property.objects.all(),
+                            'landlords': CustomUser.objects.filter(role='landlord')
+                        })
+                    
+                    user = form.save(commit=False)
                     user.role = 'tenant'
                     user.save()
                     Tenant.objects.create(
                         user=user,
-                        assigned_property_id=request.POST.get('property_id'),
-                        unit_number=request.POST.get('unit_number'),
+                        assigned_property_id=property_id,
+                        unit_number=unit_number,
                         status='pending',
                         rent_amount=0
                     )
@@ -61,6 +73,7 @@ def login_view(request):
                 
                 # 🛠️ MAINTENANCE STAFF SIGNUP
                 elif selected_role == 'maintenance':
+                    user = form.save(commit=False)
                     user.role = 'maintenance'
                     user.is_active = False  
                     user.specialization = request.POST.get('specialization')
@@ -76,6 +89,7 @@ def login_view(request):
                 
                 # 🔑 LANDLORD SIGNUP
                 else:
+                    user = form.save(commit=False)
                     user.role = 'landlord'
                     user.save()
                     login(request, user)
@@ -615,13 +629,17 @@ def tenant_dashboard(request):
         if 'submit_move_out' in request.POST:
             form = MoveOutRequestForm(request.POST, instance=tenant_profile)
             if form.is_valid():
+                # ⭐ THE FIX: Save the form tracking dates and reasons directly
+                tenant_profile = form.save(commit=False)
                 tenant_profile.status = 'notice_given'
                 tenant_profile.notice_sent_at = timezone.now()
                 tenant_profile.save()
+                
                 messages.warning(request, "Your move-out request has been sent to management.")
                 return redirect('tenant_dashboard')
             else:
-                messages.error(request, "There was an error with your submission.")
+                # If form is invalid, send the errors along to the template instead of a silent failure
+                messages.error(request, "Please correct the errors in your move-out request form.")
 
         # CANCEL MOVE-OUT NOTICE
         elif 'cancel_move_out' in request.POST:
@@ -637,11 +655,13 @@ def tenant_dashboard(request):
     # --- 5. FETCH DATA FOR DISPLAY ---
     move_out_form = MoveOutRequestForm(instance=tenant_profile)
     
-    # Targeted Announcement Logic
+    # We now look for either the explicit "is_broadcast" flag 
+    # OR if the announcement was specifically targeted to this tenant's property.
     announcements = Announcement.objects.filter(
-        Q(target_property__isnull=True) | Q(target_property=tenant_profile.assigned_property),
+        Q(is_broadcast=True) | Q(target_property=tenant_profile.assigned_property),
         is_active=True
     ).order_by('-date_posted')[:3]
+
 
     my_payments = Payment.objects.filter(tenant=tenant_profile).order_by('-date')[:5]
 
@@ -671,6 +691,7 @@ def tenant_dashboard(request):
     }
     
     return render(request, 'tenants/tenant_dashboard.html', context)
+
 @login_required
 def report_issue(request):
     # Security: Ensure only tenants can report issues here
@@ -826,24 +847,25 @@ def maintenance_dashboard(request):
 def update_task(request, pk):
     """
     Allows a technician to change status, categorize the issue, 
-    and leave technical notes.
+    input completion costs, and leave technical notes.
     """
-    # Security: Ensure they can only update tasks assigned to THEM
     task = get_object_or_404(MaintenanceRequest, pk=pk, assigned_to=request.user)
     
     if request.method == 'POST':
         form = MaintenanceTaskUpdateForm(request.POST, instance=task)
         if form.is_valid():
-            # Save the record (auto-updates date_resolved if status is 'completed')
-            form.save() 
+            # 1. Save the task details
+            task = form.save() 
             
-            # Context-aware success message
+            # 2. ⭐ THE FIX: Recalculate tenant balance if a tenant is attached
+            # This ensures 'completed' tasks push their costs to the ledger instantly
+            if task.tenant:
+                task.tenant.update_balance()
+            
             status_text = task.get_status_display()
-            messages.success(request, f"Task #{task.id} updated to '{status_text}'.")
-            
+            messages.success(request, f"Task #{task.id} updated to '{status_text}' and balance synced.")
             return redirect('maintenance_dashboard')
         else:
-            # If validation fails, the form re-renders with the errors we added to the HTML
             messages.error(request, "Please correct the errors below.")
     else:
         form = MaintenanceTaskUpdateForm(instance=task)
@@ -1021,13 +1043,33 @@ def edit_property(request, pk):
 
 @login_required(login_url='login')
 def delete_property(request, pk):
+    # Security: Ensure only the landlord who owns the property can delete it
     property_obj = get_object_or_404(Property, pk=pk, landlord=request.user)
+    
     if request.method == 'POST':
         name = property_obj.name
-        property_obj.delete()
-        messages.success(request, f"Property {name} deleted successfully.")
-        return redirect('properties')
-    return render(request, 'confirm_delete.html', {'obj': property_obj.name, 'type': 'property', 'back_url': reverse('properties')})
+        try:
+            # Attempt to delete
+            property_obj.delete()
+            messages.success(request, f"Property {name} deleted successfully.")
+            return redirect('properties')
+        except ProtectedError:
+            # ⭐ THE FIX: Catch the error if tenants are still assigned
+            first_tenant = property_obj.tenant_set.first()
+            tenant_name = first_tenant.user.get_full_name() if first_tenant else "active tenants"
+            
+            messages.error(request, 
+                f"Cannot delete '{name}' because it still has active tenants (e.g., {tenant_name}). "
+                "Please reassign or remove all tenants before deleting this property."
+            )
+            return redirect('properties')
+
+    # Standard confirmation page
+    return render(request, 'confirm_delete.html', {
+        'obj': property_obj.name, 
+        'type': 'property', 
+        'back_url': reverse('properties')
+    })
 
 @login_required(login_url='login')
 def edit_tenant(request, pk):
@@ -1080,14 +1122,30 @@ def edit_tenant(request, pk):
 
 @login_required(login_url='login')
 def delete_tenant(request, pk):
+    # Security: Ensure the landlord can only delete their own tenants
     tenant = get_object_or_404(Tenant, pk=pk, assigned_property__landlord=request.user)
     user = tenant.user
+    
     if request.method == 'POST':
         tenant_name = user.get_full_name()
-        user.delete() 
-        messages.success(request, f"Tenant {tenant_name} has been removed.")
-        return redirect('tenants')
-    return render(request, 'confirm_delete.html', {'obj': user.get_full_name(), 'type': 'tenant and user account', 'back_url': reverse('tenants')})
+        try:
+            # This deletes the User AND the Tenant profile (due to OneToOne CASCADE)
+            user.delete() 
+            messages.success(request, f"Tenant {tenant_name} has been removed.")
+            return redirect('tenants')
+        except ProtectedError:
+            # ⭐ THE SAFETY FIX: Prevents crash if tenant has protected payments/records
+            messages.error(request, 
+                f"Cannot delete {tenant_name} because they have linked financial or maintenance records. "
+                "Try changing their status to 'Moved Out' instead of deleting."
+            )
+            return redirect('tenants')
+
+    return render(request, 'confirm_delete.html', {
+        'obj': user.get_full_name(), 
+        'type': 'tenant and user account', 
+        'back_url': reverse('tenants')
+    })
 
 @login_required(login_url='login')
 def edit_payment(request, pk):
@@ -1113,6 +1171,7 @@ def edit_payment(request, pk):
     return render(request, 'record_payment.html', {'form': form, 'edit_mode': True, 'payment': payment})
 
 @login_required(login_url='login')
+@transaction.atomic
 def delete_payment(request, pk):
     payment = get_object_or_404(Payment, pk=pk, tenant__assigned_property__landlord=request.user)
     tenant = payment.tenant
@@ -1138,26 +1197,47 @@ def delete_payment(request, pk):
 
 @login_required(login_url='login')
 def edit_maintenance(request, pk):
+    # Security: Ensure the landlord only edits requests for their own properties
     maintenance_req = get_object_or_404(MaintenanceRequest, pk=pk, tenant__assigned_property__landlord=request.user)
+    
     if request.method == 'POST':
         form = MaintenanceForm(request.POST, instance=maintenance_req)
         if form.is_valid():
-            form.save()
+            # 1. Save the maintenance request details (status, cost, etc.)
+            maintenance = form.save()
+            
+            # 2. ⭐ THE FIX: Explicitly tell the tenant to recalculate their balance
+            # This ensures that if the cost changed or status became 'Completed', 
+            # the tenant's ledger updates immediately.
+            if maintenance.tenant:
+                maintenance.tenant.update_balance()
+            
+            messages.success(request, f"Maintenance for {maintenance.tenant.user.get_full_name()} updated and billed.")
             return redirect('maintenance')
     else:
         form = MaintenanceForm(instance=maintenance_req)
+        # Filter the tenant dropdown to only show this landlord's tenants
         form.fields['tenant'].queryset = Tenant.objects.filter(assigned_property__landlord=request.user)
+        
     return render(request, 'add_maintenance.html', {'form': form, 'edit_mode': True})
 
 @login_required(login_url='login')
+@transaction.atomic
 def delete_maintenance(request, pk):
     maintenance_req = get_object_or_404(MaintenanceRequest, pk=pk, tenant__assigned_property__landlord=request.user)
+    
     if request.method == 'POST':
+        # ⭐ THE FIX: Keep a reference to the tenant before deleting the task
+        tenant = maintenance_req.tenant
         maintenance_req.delete()
-        messages.success(request, "Maintenance request deleted.")
+        
+        # ⭐ THE FIX: Re-heal the ledger balance
+        if tenant:
+            tenant.update_balance()
+            
+        messages.success(request, "Maintenance request deleted and balance updated.")
         return redirect('maintenance')
         
-    #  THE FIX: Added reverse() around 'maintenance'
     return render(request, 'confirm_delete.html', {
         'obj': f"Request #MNT-{maintenance_req.id}", 
         'back_url': reverse('maintenance') 
@@ -1168,6 +1248,7 @@ def delete_maintenance(request, pk):
 # ==============================================================================
 
 @login_required(login_url='login')
+@transaction.atomic
 def approve_tenant_signup(request, tenant_id):
     if request.user.role != 'landlord':
         return redirect('tenant_dashboard')
@@ -1212,6 +1293,7 @@ def approve_tenant_signup(request, tenant_id):
 
     return redirect('tenants')
 @login_required(login_url='login')
+@transaction.atomic
 def reject_tenant_signup(request, tenant_id):
     if request.user.role != 'landlord':
         return redirect('tenant_dashboard')
@@ -1229,6 +1311,7 @@ def reject_tenant_signup(request, tenant_id):
     return redirect('tenants')
 
 @login_required
+@transaction.atomic
 def approve_move_out(request, tenant_id):
     # Security: Ensure only the landlord who owns the property can approve
     if request.user.role != 'landlord':
@@ -1241,6 +1324,18 @@ def approve_move_out(request, tenant_id):
     )
     
     if request.method == 'POST':
+        # ⭐ THE FIX: Force an instant ledger recalculation to get accurate numbers
+        tenant.update_balance()
+        
+        # Block approval if they still owe money
+        if tenant.balance > 0:
+            messages.error(
+                request, 
+                f"Cannot approve move-out. {tenant.user.get_full_name()} "
+                f"has an outstanding balance of KES {tenant.balance:,.2f}."
+            )
+            return redirect('tenants')
+            
         # Formal Approval: Update status and set the timestamp
         tenant.status = 'approved'
         tenant.landlord_approved_at = timezone.now()
@@ -1253,6 +1348,9 @@ def approve_move_out(request, tenant_id):
         
         messages.success(request, f"Move-out notice for {tenant.user.get_full_name()} has been approved.")
         return redirect('tenants') # Go back to the management list
+
+    # Fallback to safety if someone attempts a direct GET request
+    return redirect('tenants')
 
 @login_required
 @user_passes_test(lambda u: getattr(u, 'role', None) == 'landlord')
@@ -1614,14 +1712,55 @@ def send_mass_message(request):
             tenant_id = request.POST.get('specific_tenant_id')
             tenants = tenants.filter(id=tenant_id)
 
-        for tenant in tenants:
-            personalized_msg = content.replace("{tenant_name}", tenant.user.get_full_name())
-            if 'sms' in methods: print(f"DEBUG: SMS sent to {tenant.user.phone_number}")
-            if 'email' in methods: print(f"DEBUG: Email sent to {tenant.user.email}")
+        # Track successful deliveries for reliable dashboard feedback
+        email_count = 0
+        sms_count = 0
 
-        SentMessage.objects.create(subject=subject, content=content, recipient_count=tenants.count(), delivery_method=", ".join(methods), sender=request.user)
-        messages.success(request, f"Mass message sent to {tenants.count()} tenants!")
+        for tenant in tenants:
+            # Personalize the message content per tenant
+            personalized_msg = content.replace("{tenant_name}", tenant.user.get_full_name())
+            
+            # ✉️ 1. ACTUAL EMAIL INTEGRATION
+            if 'email' in methods and tenant.user.email:
+                try:
+                    send_mail(
+                        subject=subject,
+                        message=personalized_msg,
+                        from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'noreply@rhms.co.ke'),
+                        recipient_list=[tenant.user.email],
+                        fail_silently=False,  # Set to False inside the try block to catch exceptions
+                    )
+                    email_count += 1
+                except Exception as e:
+                    # Log the specific error to console but continue the loop for other tenants
+                    print(f"ERROR: Failed to send email to {tenant.user.email}. Details: {e}")
+
+            # 📱 2. ACTUAL SMS STRUCTURE
+            if 'sms' in methods and tenant.user.phone_number:
+                # When you hook up Africa's Talking or Twilio later, place your SDK code right here!
+                # example: africastalking.SMS.send(personalized_msg, [tenant.user.phone_number])
+                print(f"PRODUCTION SMS BOUND -> To: {tenant.user.phone_number} | Msg: {personalized_msg}")
+                sms_count += 1
+
+        # Calculate absolute deliveries
+        total_delivered = max(email_count, sms_count) if len(methods) > 1 else (email_count + sms_count)
+
+        # Save record log to tracking ledger
+        SentMessage.objects.create(
+            subject=subject, 
+            content=content, 
+            recipient_count=total_delivered, 
+            delivery_method=", ".join(methods), 
+            sender=request.user
+        )
+        
+        messages.success(
+            request, 
+            f"Mass notification processed! Delivered {email_count} emails and staged {sms_count} SMS alerts."
+        )
         return redirect(request.META.get('HTTP_REFERER', 'dashboard'))
+
+    return redirect('dashboard')
 
 @login_required(login_url='login')
 def property_detail(request, pk):
@@ -1636,42 +1775,105 @@ def import_properties(request):
         try:
             decoded_file = csv_file.read().decode('utf-8').splitlines()
             reader = csv.DictReader(decoded_file)
-            reader.fieldnames = [field.strip().lower() for field in reader.fieldnames]
+            
+            if not reader.fieldnames:
+                messages.error(request, "The CSV file is empty or has no headers.")
+                return redirect('import_properties')
+            
+            # ⭐ THE FIX (PART 1): Normalize headers by lowering AND replacing spaces with underscores
+            # This cleanly handles variations: "Property Name" -> "property_name", "Total Units" -> "total_units"
+            reader.fieldnames = [field.strip().lower().replace(" ", "_") for field in reader.fieldnames if field]
+            
             count = 0
+            skipped_count = 0
+            
             for row in reader:
+                # Fallback checks just in case the landlord used "name" vs "property_name"
+                name = row.get('name') or row.get('property_name')
+                
+                # ⭐ THE FIX (PART 2): Protect against Null Constraint crashes
+                # If a row has an empty name, skip it instead of crashing the ENTIRE import file.
+                if not name or not name.strip():
+                    skipped_count += 1
+                    continue
+                
+                # ⭐ THE FIX (PART 3): Safe Numeric Conversions
+                # If a cell is blank (""), casting directly to int() or float() would throw a ValueError.
+                raw_units = row.get('total_units')
+                total_units = int(raw_units) if raw_units and str(raw_units).isdigit() else 0
+                
+                raw_revenue = row.get('monthly_revenue')
+                try:
+                    monthly_revenue = float(raw_revenue) if raw_revenue else 0.00
+                except ValueError:
+                    monthly_revenue = 0.00
+
+                # Data is completely clean now; safe to create record
                 Property.objects.create(
                     landlord=request.user,
-                    name=row.get('name') or row.get('property name'),
-                    location=row.get('location'),
-                    total_units=row.get('total_units') or 0,
-                    monthly_revenue=row.get('monthly_revenue') or 0.00,
+                    name=name.strip(),
+                    location=row.get('location') or 'Not Specified',
+                    total_units=total_units,
+                    monthly_revenue=monthly_revenue,
                     description=row.get('description', '')
                 )
                 count += 1
-            messages.success(request, f"Successfully imported {count} properties.")
+                
+            success_msg = f"Successfully imported {count} properties."
+            if skipped_count > 0:
+                success_msg += f" ({skipped_count} rows skipped due to missing name headers)."
+                
+            messages.success(request, success_msg)
             return redirect('properties')
+            
         except Exception as e:
             messages.error(request, f"Import failed: {str(e)}")
             return redirect('import_properties')
+            
     return render(request, 'import_properties.html')
+
 
 @login_required(login_url='login')
 def generate_invoice(request, pk):
-    # Ensure the landlord can only generate invoices for their own tenants' payments
+    # ⭐ THE SECURITY FIX:
+    # Allow access if:
+    # 1. The user is the Landlord of the property linked to this payment
+    # OR 
+    # 2. The user is the Tenant linked to this payment
     payment = get_object_or_404(
         Payment, 
-        pk=pk, 
-        tenant__assigned_property__landlord=request.user
+        Q(tenant__assigned_property__landlord=request.user) | Q(tenant__user=request.user),
+        pk=pk
     )
     
     tenant = payment.tenant
+    start_date = tenant.move_in_date
+    today = timezone.now().date()
     
-    # Determine the status for the invoice footer
-    # (e.g., "Amount Still Owed" vs "Available Credit")
+    # 2. Calculate Lifetime Rent Accrued
+    # Sum the actual rent charges created for this tenant to match the database ledger
+    total_rent_data = tenant.rent_charges.aggregate(total=Sum('amount'))['total'] or 0
+    total_rent_due = Decimal(str(total_rent_data))
+
+    # 3. Calculate Lifetime Maintenance Charges
+    # Sum only 'Completed' (or 'completed') repair costs
+    total_maint_due = tenant.maintenancerequest_set.filter(
+        status__iexact='completed'  # __iexact handles both 'Completed' and 'completed'
+    ).aggregate(total=Sum('cost'))['total'] or 0
+    
+    # 4. Calculate Lifetime Payments Made
+    total_paid = tenant.payment_set.filter(
+        status='confirmed'
+    ).aggregate(total=Sum('amount'))['total'] or 0
+
+    # 5. Build Context
     context = {
         'payment': payment,
         'tenant': tenant,
         'property': tenant.assigned_property,
+        'total_rent_due': total_rent_due,
+        'total_maint_due': Decimal(str(total_maint_due)),
+        'total_paid': Decimal(str(total_paid)),
         'is_credit': tenant.balance < 0,
         'display_balance': abs(tenant.balance),
         'today': timezone.now(),

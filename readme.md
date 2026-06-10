@@ -139,6 +139,38 @@ Enable strong password validation in `renthouse/settings.py`:
 
 ---
 
+## ⚙️ Step 6: Custom Management Commands
+
+RHMS includes custom Django management commands to automate routine actions like billing and lease lifecycle management. These can be run manually or set up via cron jobs/task schedulers in production.
+
+### 1. Generate Monthly Rent
+Generates monthly rent charges for all active tenants. It automatically calculates and bills **pro-rated rent** for a tenant's first month based on their move-in date, and full rent amount thereafter. It includes safety checks to prevent double-billing for the same calendar month.
+
+    python manage.py generate_rent
+
+### 2. Check Lease Expirations
+Scans the database and shifts active/notified tenants to `'expired'` status if their lease end date is in the past, updating their final balance ledger.
+
+    python manage.py check_expired_leases
+
+---
+
+## 🧪 Step 7: Running Unit Tests
+
+To run the verification test suite covering payment validations, pro-rata logic, and announcement broadcasting:
+
+    python manage.py test
+
+---
+
+## ✉️ Step 8: Email & Notifications
+During development, RHMS is configured to print emails (e.g., password reset requests, mass notifications) directly to the console:
+
+- **Mail Backend**: `django.core.mail.backends.console.EmailBackend` (configured in `renthouse/settings.py`).
+- Inspect your running server terminal output to view any sent email content.
+
+---
+
 ## 📁 Project Structure
 
     renthouse/      # Core project configuration

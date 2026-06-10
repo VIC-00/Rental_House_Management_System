@@ -12,6 +12,8 @@ ENV/
 db.sqlite3
 db.sqlite3-journal
 
+0001_initial.py
+
 # Distribution / packaging
 dist/
 build/
@@ -20,3 +22,5 @@ build/
 # OS specific
 .DS_Store
 .thumbs
+
+ANALYSIS_REPORT.md

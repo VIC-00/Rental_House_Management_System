@@ -16,11 +16,11 @@
         
         <div class="quick-actions" style="display: flex; gap: 10px;">
             <a href="{% url 'report_payment' %}" class="btn btn-primary" style="background: linear-gradient(135deg, #3498db, #2980b9); text-decoration: none; font-weight: 700; display: flex; align-items: center; gap: 8px; padding: 10px 18px; border-radius: 8px;">
-                <span>💸</span> Report Payment
+                <span><i class="fa-solid fa-money-bill-transfer"></i></span> Report Payment
             </a>
 
             <a href="{% url 'report_issue' %}" class="btn btn-primary" style="background: linear-gradient(135deg, #5d9cec, #4a89dc); text-decoration: none; font-weight: 700; display: flex; align-items: center; gap: 8px; padding: 10px 18px; border-radius: 8px;">
-                <span>🔧</span> Report Issue
+                <span><i class="fa-solid fa-wrench"></i></span> Report Issue
             </a>
             
             {% if tenant.status == 'active' %}
@@ -33,7 +33,7 @@
                     <button type="submit" name="cancel_move_out" class="btn btn-warning" 
                             onclick="return confirm('Are you sure you want to cancel your move-out notice?')"
                             style="font-weight: 700; color: #1a1a1a; border: none; padding: 10px 18px; border-radius: 8px;">
-                        🔄 Cancel Notice
+                        <i class="fa-solid fa-rotate-left"></i> Cancel Notice
                     </button>
                 </form>
             {% endif %}
@@ -99,7 +99,7 @@
 
     <div class="card border-0 shadow-sm mb-4" style="background: var(--bg-secondary); border-radius: 12px; border: 1px solid var(--border-color) !important;">
         <div class="card-header bg-transparent border-0 pt-4 px-4 fw-bold" style="color: var(--text-primary); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1.5px;">
-            📢 Management Announcements
+            <i class="fa-solid fa-bullhorn"></i> Management Announcements
         </div>
         <div class="card-body px-4 pb-4">
             {% for note in announcements %}
@@ -184,7 +184,41 @@
         </div>
     </div>
 </div>
-
+<div id="moveOutModal" class="modal">
+    <div style="background: var(--bg-secondary); border: 1px solid var(--border-color); padding: 30px; border-radius: 12px; width: 90%; max-width: 500px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); position: relative;">
+        
+        <h3 style="color: var(--text-primary); font-family: 'Playfair Display', serif; margin-bottom: 20px; font-weight: 700;">
+            <i class="fa-solid fa-right-from-bracket"></i> Notice of Intention to Vacate
+        </h3>
+        
+        <form method="POST" action="">
+            {% csrf_token %}
+            
+            <div class="custom-modal-input" style="margin-bottom: 15px;">
+                <label style="color: var(--text-secondary); font-size: 0.85rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">
+                    Intended Move-Out Date
+                </label>
+                <input type="date" name="intended_move_out_date" required style="margin-top: 5px;">
+            </div>
+            
+            <div class="custom-modal-input" style="margin-bottom: 25px;">
+                <label style="color: var(--text-secondary); font-size: 0.85rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">
+                    Reason for Move-Out
+                </label>
+                <textarea name="move_out_reason" rows="4" placeholder="Please provide your reason for leaving (e.g. Relocation, upsizing)..." required style="margin-top: 5px; resize: none;"></textarea>
+            </div>
+            
+            <div style="display: flex; gap: 12px; justify-content: flex-end;">
+                <button type="button" id="cancelMoveOutBtn" class="btn" style="background: transparent; border: 1px solid var(--border-color); color: var(--text-primary); padding: 10px 20px; border-radius: 8px; font-weight: 700;">
+                    Dismiss
+                </button>
+                <button type="submit" name="submit_move_out" class="btn" style="background: #e74c3c; color: #fff; border: none; padding: 10px 20px; border-radius: 8px; font-weight: 700;">
+                    Submit Notice
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
 <style>
     /* ⭐ BUTTON VISIBILITY FIXED: SOLID BLUE ⭐ */
     .btn-small { 

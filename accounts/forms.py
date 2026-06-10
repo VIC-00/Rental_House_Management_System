@@ -70,7 +70,15 @@ class UserUpdateForm(forms.ModelForm):
     class Meta:
         model = CustomUser
         fields = ['first_name', 'last_name', 'username', 'email', 'phone_number']
-
+    
+    def clean_email(self):
+        email = self.cleaned_data.get('email')
+        # Check if any OTHER user already has this email
+        # self.instance.pk is the ID of the person we are currently editing
+        if CustomUser.objects.filter(email=email).exclude(pk=self.instance.pk).exists():
+            raise forms.ValidationError("This email is already registered to another account.")
+        
+        return email
 
 class AddStaffForm(forms.ModelForm):
     # --- 👤 Basic Identity ---
@@ -125,6 +133,18 @@ class PropertyForm(forms.ModelForm):
             'monthly_revenue': forms.NumberInput(attrs={'class': 'form-control', 'placeholder': 'KES'}),
             'description': forms.Textarea(attrs={'class': 'form-control', 'placeholder': 'Brief description...', 'rows': 3}),
         }
+
+    def clean_monthly_revenue(self):
+        revenue = self.cleaned_data.get('monthly_revenue')
+        if revenue is not None and revenue < 0:
+            raise forms.ValidationError("Monthly revenue cannot be negative.")
+        return revenue
+
+    def clean_total_units(self):
+        units = self.cleaned_data.get('total_units')
+        if units is not None and units <= 0:
+            raise forms.ValidationError("A property must have at least 1 unit.")
+        return units
 
 class AddTenantFullForm(forms.ModelForm):
     # --- 👤 Basic Identity (Strictly Required) ---
@@ -189,6 +209,55 @@ class AddTenantFullForm(forms.ModelForm):
             
         self.fields['unit_number'].widget.attrs.update({'placeholder': 'e.g., A4'})
         self.fields['rent_amount'].widget.attrs.update({'placeholder': 'Monthly Rent in KES'})
+    
+    def clean_email(self):
+        email = self.cleaned_data.get('email')
+        
+        # 1. Look for any existing user with this email
+        # (Assuming your user model is 'CustomUser')
+        from .models import CustomUser 
+        user_search = CustomUser.objects.filter(email=email)
+        
+        # 2. If we are EDITING an existing tenant, we MUST exclude them 
+        # from the search, otherwise they'll flag themselves as a duplicate!
+        if self.instance and self.instance.pk:
+            user_search = user_search.exclude(pk=self.instance.user.pk)
+            
+        if user_search.exists():
+            raise forms.ValidationError("This email is already registered to another account.")
+            
+        return email
+    
+    def clean(self):
+        cleaned_data = super().clean()
+        assigned_property = cleaned_data.get('assigned_property')
+        unit_number = cleaned_data.get('unit_number')
+        
+        # Pull the dates for timeline verification
+        move_in_date = cleaned_data.get('move_in_date')
+        lease_end = cleaned_data.get('lease_end')
+
+        # --- 1. Double Occupancy Check (Existing Fix) ---
+        if assigned_property and unit_number:
+            overlap = Tenant.objects.filter(
+                assigned_property=assigned_property,
+                unit_number=unit_number,
+                status='active'
+            ).exclude(pk=self.instance.pk).first()
+
+            if overlap:
+                self.add_error('unit_number', 
+                    f"Occupied by {overlap.user.get_full_name()}."
+                )
+
+        # Timeline Flow Validation ---
+        if move_in_date and lease_end:
+            if lease_end <= move_in_date:
+                self.add_error('lease_end', 
+                    "The lease end date cannot be earlier than or equal to the move-in date."
+                )
+
+        return cleaned_data
 
 class MoveOutRequestForm(forms.ModelForm):
     class Meta:
@@ -252,6 +321,47 @@ class PaymentForm(forms.ModelForm):
             'method': forms.Select(attrs={'class': 'form-control'}),
             'status': forms.Select(attrs={'class': 'form-control'}),
         }
+    def clean_amount(self):
+        amount = self.cleaned_data.get('amount')
+        if amount is not None and amount <= 0:
+            raise forms.ValidationError("Payment amount must be a positive number greater than zero.")
+        return amount
+
+
+    def __init__(self, *args, **kwargs):
+        super(PaymentForm, self).__init__(*args, **kwargs)
+        # Tell Django to stop forcing this field to be required by default
+        self.fields['transaction_id'].required = False
+
+    def clean(self):
+        cleaned_data = super().clean()
+        method = cleaned_data.get('method')
+        transaction_id = cleaned_data.get('transaction_id')
+
+        # Rule 1: M-Pesa payments MUST have a Transaction ID
+        if method == 'M-Pesa' and not transaction_id:
+            self.add_error('transaction_id', "M-Pesa payments must include a valid Transaction ID.")
+        
+        # Rule 2: Cash payments should NOT have a Transaction ID
+        if method == 'Cash' and transaction_id:
+            self.add_error('transaction_id', "Cash payments should not have a Transaction ID. Please leave it blank.")
+
+        return cleaned_data
+    
+    def clean_transaction_id(self):
+        tid = self.cleaned_data.get('transaction_id')
+        if tid:
+            # Clean the ID (convert to uppercase so 'sdr' and 'SDR' match)
+            tid = tid.strip().upper()
+            
+            # Check if this ID already exists in another payment
+            # We exclude the current instance in case we are editing an existing payment
+            exists = Payment.objects.filter(transaction_id=tid).exclude(pk=self.instance.pk).exists()
+            
+            if exists:
+                raise forms.ValidationError("This Transaction ID has already been used.")
+            return tid
+        return None
 
 class TenantPaymentForm(forms.ModelForm):
     current_year = datetime.date.today().year
@@ -278,6 +388,36 @@ class TenantPaymentForm(forms.ModelForm):
             'for_month': 'Paying for Month',
             'for_year': 'Year'
         }
+
+    def clean(self):
+        cleaned_data = super().clean()
+        method = cleaned_data.get('method')
+        transaction_id = cleaned_data.get('transaction_id')
+
+        # Rule 1: M-Pesa MUST have a code
+        if method == 'M-Pesa' and not transaction_id:
+            self.add_error('transaction_id', "Please provide your M-Pesa transaction code.")
+        
+        # ⭐ THE FIX: Rule 2: Cash MUST NOT have a code
+        if method == 'Cash' and transaction_id:
+            self.add_error('transaction_id', "Cash payments should not have a Transaction ID. Please leave it blank.")
+
+        return cleaned_data
+    
+    def clean_transaction_id(self):
+        tid = self.cleaned_data.get('transaction_id')
+        if tid:
+            # Clean the ID (convert to uppercase so 'sdr' and 'SDR' match)
+            tid = tid.strip().upper()
+            
+            # Check if this ID already exists in another payment
+            # We exclude the current instance in case we are editing an existing payment
+            exists = Payment.objects.filter(transaction_id=tid).exclude(pk=self.instance.pk).exists()
+            
+            if exists:
+                raise forms.ValidationError("This Transaction ID has already been used.")
+            return tid
+        return None
 
 # ==============================================================================
 # --- 4. OPERATIONS (Maintenance & Announcements) ---
@@ -347,10 +487,13 @@ class MaintenanceAssignmentForm(forms.ModelForm):
 class MaintenanceTaskUpdateForm(forms.ModelForm):
     class Meta:
         model = MaintenanceRequest
-        fields = ['status', 'category', 'tech_notes']
+        # ⭐ THE FIX: Added 'cost' to fields
+        fields = ['status', 'category', 'cost', 'tech_notes']
         widgets = {
             'status': forms.Select(attrs={'class': 'form-control'}),
             'category': forms.Select(attrs={'class': 'form-control'}),
+            # ⭐ THE FIX: Added design widget for cost input
+            'cost': forms.NumberInput(attrs={'class': 'form-control', 'placeholder': 'Total Cost of Materials/Labor (KES)'}),
             'tech_notes': forms.Textarea(attrs={
                 'class': 'form-control', 
                 'rows': 3, 
@@ -360,8 +503,12 @@ class MaintenanceTaskUpdateForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super(MaintenanceTaskUpdateForm, self).__init__(*args, **kwargs)
-        # ⭐ THE FIX: Technicians can now update status even without picking a category
         self.fields['category'].required = False
+        
+        current_choices = self.fields['status'].choices
+        self.fields['status'].choices = [
+            (code, label) for code, label in current_choices if code != 'pending'
+        ]
 
 class AnnouncementForm(forms.ModelForm):
     class Meta:

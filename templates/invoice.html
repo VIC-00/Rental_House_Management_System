@@ -72,30 +72,44 @@
         </table>
 
         <div style="margin-top: 50px; display: flex; justify-content: flex-end;">
-            <div style="width: 350px; background: #f8f9fa; padding: 25px; border-radius: 8px;">
-                <div style="display: flex; justify-content: space-between; margin-bottom: 12px;">
-                    <span style="color: #7f8c8d; font-weight: 600;">Standard Monthly Rent:</span>
-                    <span style="color: #2c3e50; font-weight: 600;">KES {{ tenant.rent_amount|floatformat:0 }}</span>
-                </div>
-                
-                <div style="display: flex; justify-content: space-between; border-top: 2px solid #ddd; padding-top: 15px; margin-bottom: 15px;">
-                    {% if is_credit %}
-                        <span style="color: #27ae60; font-weight: 800; font-size: 1.1rem;">Total Credit Balance:</span>
-                        <span style="color: #27ae60; font-weight: 800; font-size: 1.1rem;">KES {{ display_balance|floatformat:0 }}</span>
-                    {% else %}
-                        <span style="color: #e74c3c; font-weight: 800; font-size: 1.1rem;">Remaining Arrears:</span>
-                        <span style="color: #e74c3c; font-weight: 800; font-size: 1.1rem;">KES {{ display_balance|floatformat:0 }}</span>
-                    {% endif %}
-                </div>
-                
-                <div style="text-align: right; margin-top: 10px;">
-                    <span style="padding: 6px 15px; border-radius: 50px; font-size: 0.8rem; font-weight: 900; letter-spacing: 1px;
-                        {% if payment.status == 'confirmed' %} background: #27ae60; color: white; {% else %} background: #e67e22; color: white; {% endif %}">
-                        {{ payment.status|upper }}
-                    </span>
-                </div>
-            </div>
+    <div style="width: 380px; background: #f8f9fa; padding: 25px; border-radius: 8px; border: 1px solid #eee;">
+        <h4 style="margin: 0 0 15px 0; color: #2c3e50; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 1px;">Account Summary</h4>
+        
+        <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+            <span style="color: #7f8c8d;">Total Rent Accrued:</span>
+            <span style="color: #2c3e50; font-weight: 600;">KES {{ total_rent_due|floatformat:0 }}</span>
         </div>
+
+        {% if total_maint_due > 0 %}
+        <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+            <span style="color: #7f8c8d;">Maintenance Charges:</span>
+            <span style="color: #e67e22; font-weight: 600;">+ KES {{ total_maint_due|floatformat:0 }}</span>
+        </div>
+        {% endif %}
+
+        <div style="display: flex; justify-content: space-between; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid #ddd;">
+            <span style="color: #7f8c8d;">Total Paid to Date:</span>
+            <span style="color: #27ae60; font-weight: 600;">- KES {{ total_paid|floatformat:0 }}</span>
+        </div>
+        
+        <div style="display: flex; justify-content: space-between; margin-bottom: 15px;">
+            {% if is_credit %}
+                <span style="color: #27ae60; font-weight: 800; font-size: 1.1rem;">Total Credit Balance:</span>
+                <span style="color: #27ae60; font-weight: 800; font-size: 1.1rem;">KES {{ display_balance|floatformat:0 }}</span>
+            {% else %}
+                <span style="color: #e74c3c; font-weight: 800; font-size: 1.1rem;">Net Arrears:</span>
+                <span style="color: #e74c3c; font-weight: 800; font-size: 1.1rem;">KES {{ display_balance|floatformat:0 }}</span>
+            {% endif %}
+        </div>
+        
+        <div style="text-align: right;">
+            <span style="padding: 6px 15px; border-radius: 50px; font-size: 0.8rem; font-weight: 900; letter-spacing: 1px;
+                {% if payment.status == 'confirmed' %} background: #27ae60; color: white; {% else %} background: #e67e22; color: white; {% endif %}">
+                {{ payment.status|upper }}
+            </span>
+        </div>
+    </div>
+</div>
 
         <div style="margin-top: 60px; text-align: center; border-top: 1px dashed #ddd; padding-top: 30px;">
             <p style="color: #34495e; font-size: 1rem; line-height: 1.6;">

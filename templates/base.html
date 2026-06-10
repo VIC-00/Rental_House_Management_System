@@ -14,6 +14,7 @@
     <title>Property Hub - All eggs in one basket</title>
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Raleway:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         /* Sidebar Collapse Styles */
         #appWrapper.collapsed .sidebar { width: 70px; }
@@ -31,6 +32,69 @@
         
         /* Modal visibility fix */
         .modal { display: none; position: fixed; z-index: 3000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.6); }
+    
+        /* Sub-navigation Styling */
+/* --- Sidebar Sub-Nav Fixes --- */
+
+/* 1. Hide the entire sub-menu container when sidebar is collapsed */
+#appWrapper.collapsed .sub-nav {
+    display: none !important;
+}
+
+/* 2. Hide the dropdown arrow when sidebar is collapsed */
+#appWrapper.collapsed .nav-group .arrow {
+    display: none;
+}
+
+/* 3. Ensure the sub-nav stays within the sidebar when open */
+.sub-nav {
+    display: none;
+    background: rgba(0, 0, 0, 0.2);
+    margin: 5px 10px 10px 15px;
+    border-radius: 8px;
+    overflow: hidden; /* Keeps text from bleeding out */
+}
+
+/* 4. Show it when the group is toggled open */
+.nav-group.open .sub-nav {
+    display: block;
+}
+
+.nav-group.open .arrow {
+    transform: rotate(180deg);
+}
+
+.sub-nav-item {
+    display: block;
+    padding: 10px 15px 10px 25px;
+    color: var(--text-secondary);
+    text-decoration: none;
+    font-size: 0.85rem;
+    white-space: nowrap; /* Prevents text from wrapping awkwardly */
+    transition: all 0.2s ease;
+}
+
+.sub-nav-item:hover {
+    color: var(--text-primary);
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.sub-nav-item.active {
+    color: #3498db;
+    font-weight: 700;
+}
+
+.sidebar .nav-item .icon {
+    display: inline-block;
+    width: 24px; /* Adjust this to match your other icons */
+    text-align: center;
+    margin-right: 12px; /* Consistent gap between icon and text */
+}
+
+/* Ensure the sub-nav text starts exactly under the parent text */
+.sub-nav-item {
+    padding-left: 51px; /* (Icon width 24px + gap 12px + sidebar padding 15px) */
+}
     </style>
 </head>
 <body>
@@ -38,76 +102,97 @@
     <div id="appWrapper" class="visible"> 
         <div class="sidebar">
             <div class="logo">
-                <h2>🏠 PropertyHub</h2>
+                <h2> <i class="fa-solid fa-building-user"></i> PropertyHub</h2>
                 <p>All eggs in one basket</p>
             </div>
 
             {% if request.user.role == 'landlord' %}
                 <a href="{% url 'dashboard' %}" class="nav-item {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">
-                    <span class="icon">📊</span> <span>Home</span>
+                    <span class="icon"><i class="fa-solid fa-chart-pie"></i></span> <span>Home</span>
                 </a>
                 <a href="{% url 'properties' %}" class="nav-item {% if request.resolver_match.url_name == 'properties' %}active{% endif %}">
-                    <span class="icon">🏢</span> <span>Properties</span>
+                    <span class="icon"><i class="fa-solid fa-city"></i></span> <span>Properties</span>
                 </a>
                 <a href="{% url 'tenants' %}" class="nav-item {% if request.resolver_match.url_name == 'tenants' %}active{% endif %}">
-                    <span class="icon">👥</span> <span>Tenants</span>
+                    <span class="icon"><i class="fa-solid fa-users-rectangle"></i></span> <span>Tenants</span>
                 </a>
                 <a href="{% url 'payments' %}" class="nav-item {% if request.resolver_match.url_name == 'payments' %}active{% endif %}">
-                    <span class="icon">💸</span> <span>Payments</span>
+                    <span class="icon"><i class="fa-solid fa-wallet"></i></span> <span>Payments</span>
                 </a>
-                <a href="{% url 'maintenance' %}" class="nav-item {% if 'maintenance' in request.path and request.user.role == 'landlord' %}active{% endif %}">
-                    <span class="icon">🛠️</span> <span>Maintenance</span>
-                </a>
+
+             <div class="nav-group {% if 'maintenance' in request.path or 'staff' in request.path %}open{% endif %}">
+                <div class="nav-item dropdown-trigger {% if 'maintenance' in request.path and 'staff' not in request.path %}active{% endif %}" 
+                    style="display: flex; align-items: center; cursor: pointer; position: relative;">
+                    
+                    <span class="icon"><i class="fa-solid fa-screwdriver-wrench"></i></span> 
+                    <span>Maintenance</span>
+                    
+                    <span class="arrow" style="position: absolute; right: 15px; font-size: 0.6rem; opacity: 0.5; transition: transform 0.3s;"><i class="fa-solid fa-chevron-down"></i></span>
+                </div>
+                
+                <div class="sub-nav">
+                    <a href="{% url 'maintenance' %}" class="sub-nav-item {% if request.resolver_match.url_name == 'maintenance' %}active{% endif %}">
+                        • Work Orders
+                    </a>
+                    <a href="{% url 'manage_staff' %}" class="sub-nav-item {% if 'staff' in request.path %}active{% endif %}" style="display: flex; justify-content: space-between; align-items: center;">
+                        <span>• Staff Management</span>
+                        {% if pending_staff_count > 0 %}
+                            <span class="sidebar-badge">{{ pending_staff_count }}</span>
+                        {% endif %}
+                    </a>
+                </div>
+            </div>
+
                 <a href="{% url 'reports' %}" class="nav-item {% if request.resolver_match.url_name == 'reports' %}active{% endif %}">
-                    <span class="icon">📈</span> <span>Reports</span>
+                    <span class="icon"><i class="fa-solid fa-file-invoice-dollar"></i></span> <span>Reports</span>
                 </a>
                 <a href="{% url 'settings' %}" class="nav-item {% if request.resolver_match.url_name == 'settings' %}active{% endif %}">
-                    <span class="icon">⚙️</span> <span>Settings</span>
+                    <span class="icon"><i class="fa-solid fa-gears"></i></span> <span>Settings</span>
                 </a>
 
             {% elif request.user.role == 'maintenance' %}
                 <a href="{% url 'maintenance_dashboard' %}" class="nav-item {% if request.resolver_match.url_name == 'maintenance_dashboard' %}active{% endif %}">
-                    <span class="icon">📋</span> <span>My Tasks</span>
+                    <span class="icon"><i class="fa-solid fa-clipboard-list"></i></span> <span>My Tasks</span>
                 </a>
                 <a href="{% url 'maintenance_work_history' %}" class="nav-item {% if request.resolver_match.url_name == 'maintenance_work_history' %}active{% endif %}">
-                    <span class="icon">📜</span> <span>Work History</span>
+                    <span class="icon"><i class="fa-solid fa-clock-rotate-left"></i></span> <span>Work History</span>
                 </a>
                 <a href="{% url 'settings' %}" class="nav-item {% if request.resolver_match.url_name == 'settings' %}active{% endif %}">
-                    <span class="icon">⚙️</span> <span>Profile Settings</span>
+                    <span class="icon"><i class="fa-solid fa-gear"></i></span> <span>Profile Settings</span>
                 </a>
 
             {% elif request.user.role == 'tenant' %}
                 <a href="{% url 'tenant_dashboard' %}" class="nav-item {% if request.resolver_match.url_name == 'tenant_dashboard' %}active{% endif %}">
-                    <span class="icon">🏠</span> <span>Home</span>
+                    <span class="icon"><i class="fa-solid fa-house-chimney-user"></i></span> <span>Home</span>
                 </a>
                 <a href="{% url 'maintenance_history' %}" class="nav-item {% if request.resolver_match.url_name == 'maintenance_history' %}active{% endif %}">
-                    <span class="icon">🛠️</span> <span>Maintenance</span>
+                    <span class="icon"><i class="fa-solid fa-screwdriver-wrench"></i></span> <span>Maintenance</span>
                 </a>
                 <a href="{% url 'payment_history' %}" class="nav-item {% if request.resolver_match.url_name == 'payment_history' %}active{% endif %}">
-                    <span class="icon">💰</span> <span>Payments</span>
+                    <span class="icon"><i class="fa-solid fa-coins"></i></span> <span>Payments</span>
                 </a>
                 <a href="{% url 'settings' %}" class="nav-item {% if request.resolver_match.url_name == 'settings' %}active{% endif %}">
-                    <span class="icon">⚙️</span> <span>Settings</span>
+                    <span class="icon"><i class="fa-solid fa-gears"></i></span> <span>Settings</span>
                 </a>
             {% endif %}
 
             <a href="{% url 'logout' %}" style="text-decoration: none; margin-top: auto;">
                 <div class="nav-item" style="color:rgba(255,100,100,0.85); border-top: 1px solid rgba(255,255,255,0.08);">
-                    <span class="icon">🚪</span> <span>Sign Out</span>
+                    <span class="icon"><i class="fa-solid fa-right-from-bracket"></i></span> <span>Sign Out</span>
                 </div>
             </a>
         </div>
 
         <div class="main-content">
             <div class="top-bar">
-                <button id="sidebarToggle" class="sidebar-toggle-btn">☰</button>
+                <button id="sidebarToggle" class="sidebar-toggle-btn"><i class="fa-solid fa-bars-staggered"></i></button>
                 <h1 id="pageTitle" style="margin: 0; font-size: 1.25rem;">
                     {% if request.user.role == 'maintenance' %}Maintenance Portal{% else %}Dashboard{% endif %}
                 </h1>
                 
                 <div class="top-bar-right">
                     <button class="dark-mode-btn" id="darkModeBtn">
-                        <span id="darkModeIcon">&#127769;</span>
+                        <span id="darkModeIcon"><i class="fa-solid fa-moon"></i></span>
                         <span id="darkModeText">Dark Mode</span>
                     </button>
                     <div class="user-info" id="profileDropdownBtn" style="cursor: pointer; position: relative; padding-right: 5px;">
@@ -145,8 +230,8 @@
         <div id="massMessageModal" class="modal">
             <div class="modal-content" style="max-width: 750px; width: 90%; background-color: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 10px; box-shadow: 0 10px 40px rgba(0,0,0,0.3); margin: 5% auto;"> 
                 <div class="modal-header" style="padding: 20px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
-                    <h2 style="margin: 0;">📧 Send Broadcast</h2>
-                    <button type="button" class="close-btn" id="closeModal" style="background:none; border:none; font-size: 24px; cursor: pointer; color: var(--text-secondary);">&times;</button>
+                    <h2 style="margin: 0;"><i class="fa-solid fa-envelope-open-text"></i>Send Broadcast</h2>
+                    <button type="button" class="close-btn" id="closeModal" style="background:none; border:none; font-size: 24px; cursor: pointer; color: var(--text-secondary);"><i class="fa-solid fa-xmark"></i></button>
                 </div>
                 
                 <form method="POST" action="{% url 'send_mass_message' %}">
@@ -243,6 +328,14 @@
             window.onclick = (e) => { if (e.target == massModal) hideModal(); }
         }
     });
+
+        // Toggle Sidebar Dropdowns
+        document.querySelectorAll('.dropdown-trigger').forEach(trigger => {
+            trigger.addEventListener('click', function() {
+                const group = this.parentElement;
+                group.classList.toggle('open');
+            });
+        });
     </script>
 </body>
 </html>

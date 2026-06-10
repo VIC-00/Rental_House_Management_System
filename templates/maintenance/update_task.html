@@ -63,6 +63,16 @@
 
                 <div class="form-group mb-4">
                     <label style="display: block; font-weight: 700; margin-bottom: 10px; font-size: 0.9rem; color: var(--text-primary);">
+                        Total Expenses / Repair Cost (KES)
+                    </label>
+                    {{ form.cost }}
+                    <small style="color: var(--text-secondary); display: block; margin-top: 5px;">
+                        Enter 0 if this was an unbilled checkup or covered under warranty.
+                    </small>
+                </div>
+
+                <div class="form-group mb-4">
+                    <label style="display: block; font-weight: 700; margin-bottom: 10px; font-size: 0.9rem; color: var(--text-primary);">
                         Service Notes / Parts Used
                     </label>
                     {{ form.tech_notes }}
@@ -85,7 +95,8 @@
 </div>
 
 <style>
-    select, textarea {
+    /* ⭐ THE FIX: Added 'input' to apply uniform border and backgrounds */
+    select, textarea, input {
         width: 100%;
         padding: 12px 16px;
         border: 1px solid var(--border-color);
@@ -97,7 +108,8 @@
         transition: all 0.2s ease;
     }
     
-    select:focus, textarea:focus {
+    /* ⭐ THE FIX: Added 'input:focus' */
+    select:focus, textarea:focus, input:focus {
         outline: none;
         border-color: #3498db;
         box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.15);

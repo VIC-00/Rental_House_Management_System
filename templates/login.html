@@ -1,407 +1,468 @@
 {% load static %}
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>PropertyHub - All eggs in one basket</title>
-    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Raleway:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Raleway:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
     <style>
-        :root {
-            --bg-primary: #1a1a1a;
-            --bg-secondary: #121212;
-            --accent-color: #3498db;
-            --text-primary: #ffffff;
-            --text-secondary: #b0b0b0;
-            --border-color: rgba(255,255,255,0.1);
-            --input-bg: #242424;
-            --input-border: #333;
+      :root {
+        --bg-primary: #1a1a1a;
+        --bg-secondary: #121212;
+        --accent-color: #3498db;
+        --text-primary: #ffffff;
+        --text-secondary: #b0b0b0;
+        --border-color: rgba(255, 255, 255, 0.1);
+        --input-bg: #242424;
+        --input-border: #333;
+      }
+      
+      body {
+        background-color: var(--bg-secondary);
+        color: var(--text-primary);
+        font-family: 'Raleway', sans-serif;
+        margin: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+      }
+      
+      #authScreen {
+        width: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+      }
+      
+      .auth-card {
+        width: 100%;
+        max-width: 500px;
+        background: var(--bg-primary);
+        border-radius: 12px;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+        border: 1px solid var(--border-color);
+        overflow: hidden;
+      }
+      
+      .auth-logo {
+        text-align: center;
+        padding: 35px 20px 15px;
+      }
+      
+      .auth-logo h1 {
+        font-family: 'Playfair Display', serif;
+        margin: 0;
+        font-size: 2.4rem;
+        color: #fff;
+      }
+      
+      .auth-logo p {
+        color: var(--text-secondary);
+        font-size: 0.95rem;
+        margin-top: 5px;
+        letter-spacing: 1px;
+      }
+      
+      /* Notifications */
+      .auth-alert {
+        padding: 15px;
+        border-radius: 8px;
+        margin: 0 30px 20px;
+        font-size: 0.85rem;
+        font-weight: 600;
+        line-height: 1.4;
+        border-left: 4px solid #e74c3c;
+        background: rgba(231, 76, 60, 0.1);
+        color: #ff6b6b;
+        animation: slideDown 0.4s ease-out;
+      }
+      
+      @keyframes slideDown {
+        from {
+          transform: translateY(-10px);
+          opacity: 0;
         }
-
-        body {
-            background-color: var(--bg-secondary);
-            color: var(--text-primary);
-            font-family: 'Raleway', sans-serif;
-            margin: 0;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            min-height: 100vh;
+        to {
+          transform: translateY(0);
+          opacity: 1;
         }
-
-        #authScreen {
-            width: 100%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 20px;
-        }
-
-        .auth-card {
-            width: 100%;
-            max-width: 500px;
-            background: var(--bg-primary);
-            border-radius: 12px;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.5);
-            border: 1px solid var(--border-color);
-            overflow: hidden;
-        }
-
-        .auth-logo {
-            text-align: center;
-            padding: 35px 20px 15px;
-        }
-
-        .auth-logo h1 {
-            font-family: 'Playfair Display', serif;
-            margin: 0;
-            font-size: 2.4rem;
-            color: #fff;
-        }
-
-        .auth-logo p {
-            color: var(--text-secondary);
-            font-size: 0.95rem;
-            margin-top: 5px;
-            letter-spacing: 1px;
-        }
-
-        /* Notifications */
-        .auth-alert {
-            padding: 15px;
-            border-radius: 8px;
-            margin: 0 30px 20px;
-            font-size: 0.85rem;
-            font-weight: 600;
-            line-height: 1.4;
-            border-left: 4px solid #e74c3c;
-            background: rgba(231, 76, 60, 0.1);
-            color: #ff6b6b;
-            animation: slideDown 0.4s ease-out;
-        }
-
-        @keyframes slideDown {
-            from { transform: translateY(-10px); opacity: 0; }
-            to { transform: translateY(0); opacity: 1; }
-        }
-
-        /* Tabs */
-        .auth-tabs {
-            display: flex;
-            border-bottom: 1px solid var(--border-color);
-            background: rgba(255,255,255,0.02);
-        }
-        
-        .auth-tab {
-            flex: 1;
-            padding: 18px;
-            border: none;
-            background: none;
-            font-weight: 700;
-            cursor: pointer;
-            color: var(--text-secondary);
-            transition: 0.3s ease;
-            font-size: 0.9rem;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-
-        .auth-tab.active {
-            color: #ffffff;
-            background: rgba(255,255,255,0.05);
-            border-bottom: 3px solid var(--accent-color);
-        }
-
-        .auth-panel { padding: 30px; display: none; }
-        .auth-panel.active { display: block; }
-
-        /* Role Selector */
-        .role-selector {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 10px;
-            margin-bottom: 25px;
-        }
-
-        .role-option {
-            background: var(--bg-secondary);
-            padding: 12px;
-            border-radius: 8px;
-            border: 1px solid var(--border-color);
-            text-align: center;
-            cursor: pointer;
-            transition: 0.2s;
-        }
-
-        .role-option span {
-            font-size: 0.75rem;
-            font-weight: 700;
-            color: var(--text-secondary);
-            text-transform: uppercase;
-        }
-
-        .role-option:has(input:checked) {
-            border-color: var(--accent-color);
-            background: rgba(52, 152, 219, 0.15);
-        }
-
-        .role-option:has(input:checked) span { color: #ffffff; }
-        .role-option input { display: none; }
-
-        /* Form Fields */
-        .auth-field { margin-bottom: 20px; position: relative; }
-        .auth-field label {
-            display: block;
-            margin-bottom: 8px;
-            font-size: 0.85rem;
-            font-weight: 600;
-            color: var(--text-secondary);
-        }
-
-        .auth-panel input[type="text"], 
-        .auth-panel input[type="email"], 
-        .auth-panel input[type="password"], 
-        .auth-select {
-            width: 100%;
-            padding: 14px;
-            border-radius: 8px;
-            border: 1px solid var(--input-border);
-            background: var(--input-bg);
-            color: #ffffff;
-            font-family: inherit;
-            box-sizing: border-box;
-            font-size: 0.95rem;
-            transition: 0.3s;
-        }
-
-        .auth-panel input:focus, .auth-select:focus {
-            border-color: var(--accent-color);
-            outline: none;
-            background: #2a2a2a;
-        }
-
-        .toggle-pw {
-            position: absolute;
-            right: 15px;
-            top: 40px;
-            cursor: pointer;
-            color: var(--text-secondary);
-            font-size: 1.1rem;
-        }
-
-        .auth-submit {
-            width: 100%;
-            padding: 15px;
-            border-radius: 8px;
-            background: var(--accent-color);
-            color: white;
-            border: none;
-            font-weight: 700;
-            cursor: pointer;
-            margin-top: 10px;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            transition: 0.3s;
-        }
-
-        .auth-submit:hover { opacity: 0.9; transform: translateY(-1px); }
-
-        .special-fields {
-            margin-bottom: 15px;
-            padding: 18px;
-            background: rgba(255,255,255,0.03);
-            border-radius: 10px;
-            border: 1px dashed var(--border-color);
-        }
+      }
+      
+      /* Tabs */
+      .auth-tabs {
+        display: flex;
+        border-bottom: 1px solid var(--border-color);
+        background: rgba(255, 255, 255, 0.02);
+      }
+      
+      .auth-tab {
+        flex: 1;
+        padding: 18px;
+        border: none;
+        background: none;
+        font-weight: 700;
+        cursor: pointer;
+        color: var(--text-secondary);
+        transition: 0.3s ease;
+        font-size: 0.9rem;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+      }
+      
+      .auth-tab.active {
+        color: #ffffff;
+        background: rgba(255, 255, 255, 0.05);
+        border-bottom: 3px solid var(--accent-color);
+      }
+      
+      .auth-panel {
+        padding: 30px;
+        display: none;
+      }
+      .auth-panel.active {
+        display: block;
+      }
+      
+      /* Role Selector */
+      .role-selector {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 10px;
+        margin-bottom: 25px;
+      }
+      
+      .role-option {
+        background: var(--bg-secondary);
+        padding: 12px;
+        border-radius: 8px;
+        border: 1px solid var(--border-color);
+        text-align: center;
+        cursor: pointer;
+        transition: 0.2s;
+      }
+      
+      .role-option span {
+        font-size: 0.75rem;
+        font-weight: 700;
+        color: var(--text-secondary);
+        text-transform: uppercase;
+      }
+      
+      .role-option:has(input:checked) {
+        border-color: var(--accent-color);
+        background: rgba(52, 152, 219, 0.15);
+      }
+      
+      .role-option:has(input:checked) span {
+        color: #ffffff;
+      }
+      .role-option input {
+        display: none;
+      }
+      
+      /* Form Fields */
+      .auth-field {
+        margin-bottom: 20px;
+        position: relative;
+      }
+      .auth-field label {
+        display: block;
+        margin-bottom: 8px;
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: var(--text-secondary);
+      }
+      
+      .auth-panel input[type='text'],
+      .auth-panel input[type='email'],
+      .auth-panel input[type='password'],
+      .auth-select {
+        width: 100%;
+        padding: 14px;
+        border-radius: 8px;
+        border: 1px solid var(--input-border);
+        background: var(--input-bg);
+        color: #ffffff;
+        font-family: inherit;
+        box-sizing: border-box;
+        font-size: 0.95rem;
+        transition: 0.3s;
+      }
+      
+      .auth-panel input:focus,
+      .auth-select:focus {
+        border-color: var(--accent-color);
+        outline: none;
+        background: #2a2a2a;
+      }
+      
+      .toggle-pw {
+        position: absolute;
+        right: 15px;
+        top: 40px;
+        cursor: pointer;
+        color: var(--text-secondary);
+        font-size: 1.1rem;
+      }
+      
+      .auth-submit {
+        width: 100%;
+        padding: 15px;
+        border-radius: 8px;
+        background: var(--accent-color);
+        color: white;
+        border: none;
+        font-weight: 700;
+        cursor: pointer;
+        margin-top: 10px;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        transition: 0.3s;
+      }
+      
+      .auth-submit:hover {
+        opacity: 0.9;
+        transform: translateY(-1px);
+      }
+      
+      .special-fields {
+        margin-bottom: 15px;
+        padding: 18px;
+        background: rgba(255, 255, 255, 0.03);
+        border-radius: 10px;
+        border: 1px dashed var(--border-color);
+      }
     </style>
-</head>
-<body>
-
+  </head>
+  <body>
     <div id="authScreen">
-        <div class="auth-card">
-            <div class="auth-logo">
-                <h1>PropertyHub</h1>
-                <p>All eggs in one basket</p>
-            </div>
-
-            {% if messages %}
-            <div id="django-messages-container">
-                {% for message in messages %}
-                <div class="auth-alert {{ message.tags }}" 
-                     style="border-left-color: {% if 'success' in message.tags %}#2ecc71{% else %}#e74c3c{% endif %}; 
-                            background: {% if 'success' in message.tags %}rgba(46, 204, 113, 0.1){% else %}rgba(231, 76, 60, 0.1){% endif %}; 
-                            color: {% if 'success' in message.tags %}#2ecc71{% else %}#ff6b6b{% endif %};">
-                    {{ message }}
-                </div>
-                {% endfor %}
-            </div>
-            {% endif %}
-
-            <div class="auth-tabs">
-                <button class="auth-tab active" id="tabLogin" onclick="switchTab('login')">Sign In</button>
-                <button class="auth-tab" id="tabSignup" onclick="switchTab('signup')">Register</button>
-            </div>
-
-            <div class="auth-panel active" id="panelLogin">
-                <form method="POST">
-                    {% csrf_token %}
-                    <div class="auth-field">
-                        <label>Username / Email</label>
-                        <input type="text" name="username" placeholder="Enter credentials" required>
-                    </div>
-                    <div class="auth-field">
-                        <label>Password</label>
-                        <input type="password" name="password" id="loginPassword" placeholder="••••••••" required>
-                        <span class="toggle-pw" onclick="togglePw('loginPassword', this)">👁️</span>
-                    </div>
-                    <button type="submit" class="auth-submit">Enter Dashboard</button>
-                </form>
-            </div>
-
-            <div class="auth-panel" id="panelSignup">
-                <form method="POST">
-                    {% csrf_token %}
-                    <label style="display:block; margin-bottom: 12px; font-size: 0.8rem; font-weight: 700; color: var(--text-secondary);">ACCOUNT TYPE:</label>
-                    <div class="role-selector">
-                        <label class="role-option">
-                            <input type="radio" name="role_selection" value="landlord" checked>
-                            <span>Landlord</span>
-                        </label>
-                        <label class="role-option">
-                            <input type="radio" name="role_selection" value="tenant">
-                            <span>Tenant</span>
-                        </label>
-                        <label class="role-option">
-                            <input type="radio" name="role_selection" value="maintenance">
-                            <span>Staff</span>
-                        </label>
-                    </div>
-
-                    <div style="display: flex; gap: 10px; margin-bottom: 20px;">
-                        <div style="flex: 1;">
-                            <label style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary);">First Name</label>
-                            <input type="text" name="first_name" placeholder="John" required>
-                        </div>
-                        <div style="flex: 1;">
-                            <label style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary);">Last Name</label>
-                            <input type="text" name="last_name" id="lastNameInput" placeholder="Doe" required>
-                        </div>
-                    </div>
-
-                    <div class="auth-field">
-                        <label>Username</label>
-                        <input type="text" name="username" placeholder="Choose a unique ID" required>
-                    </div>
-
-                    <div class="auth-field">
-                        <label>Email Address</label>
-                        <input type="email" name="email" placeholder="email@example.com" required>
-                    </div>
-
-                    <div id="tenantFields" class="special-fields" style="display: none;">
-                        <div class="auth-field">
-                            <label>Assigned Property</label>
-                            <select name="property_id" class="auth-select">
-                                <option value="">-- Choose Building --</option>
-                                {% for property in properties %}
-                                    <option value="{{ property.id }}">{{ property.name }}</option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                        <div class="auth-field">
-                            <label>Unit Number</label>
-                            <input type="text" name="unit_number" placeholder="e.g. B12">
-                        </div>
-                    </div>
-
-                    <div id="maintenanceFields" class="special-fields" style="display: none;">
-                        <div class="auth-field">
-                            <label>Select Your Landlord / Agency</label>
-                            <select name="target_landlord" class="auth-select">
-                                <option value="">-- Choose Employer --</option>
-                                {% for landlord in landlords %}
-                                    <option value="{{ landlord.id }}">{{ landlord.get_full_name }}</option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                        <div class="auth-field">
-                            <label>Trade / Specialization</label>
-                            <input type="text" name="specialization" placeholder="e.g. Plumber, Electrician">
-                        </div>
-                    </div>
-
-                    <div class="auth-field">
-                        <label>Password</label>
-                        <input type="password" name="password1" id="signupPassword" required>
-                        <span class="toggle-pw" onclick="togglePw('signupPassword', this)">👁️</span>
-                    </div>
-
-                    <div class="auth-field">
-                        <label>Confirm Password</label>
-                        <input type="password" name="password2" id="signupConfirm" required>
-                        <span class="toggle-pw" onclick="togglePw('signupConfirm', this)">👁️</span>
-                    </div>
-
-                    <button type="submit" name="signup_submit" class="auth-submit">Create Account</button>
-                </form>
-            </div>
+      <div class="auth-card">
+        <div class="auth-logo">
+          <h1><i class="fa-solid fa-building-user"></i> PropertyHub</h1>
+          <p>All eggs in one basket</p>
         </div>
+
+        {% if messages %}
+          <div id="django-messages-container">
+            {% for message in messages %}
+              <div class="auth-alert {{ message.tags }}"
+                style="border-left-color: {% if 'success' in message.tags %}
+                  
+                  #2ecc71
+
+                {% else %}
+                  
+                  #e74c3c
+
+                {% endif %}; 
+                            background: {% if 'success' in message.tags %}
+                  
+                  rgba(46, 204, 113, 0.1)
+
+                {% else %}
+                  
+                  rgba(231, 76, 60, 0.1)
+
+                {% endif %}; 
+                            color: {% if 'success' in message.tags %}
+                  
+                  #2ecc71
+
+                {% else %}
+                  
+                  #ff6b6b
+
+                {% endif %};">{{ message }}</div>
+            {% endfor %}
+          </div>
+        {% endif %}
+
+        <div class="auth-tabs">
+          <button class="auth-tab active" id="tabLogin" onclick="switchTab('login')">Sign In</button>
+          <button class="auth-tab" id="tabSignup" onclick="switchTab('signup')">Register</button>
+        </div>
+
+        <div class="auth-panel active" id="panelLogin">
+          <form method="POST">
+            {% csrf_token %}
+            <div class="auth-field">
+              <label>Username / Email</label>
+              <input type="text" name="username" placeholder="Enter credentials" required />
+            </div>
+            <div class="auth-field">
+              <label>Password</label>
+              <input type="password" name="password" id="loginPassword" placeholder="••••••••" required />
+              <span class="toggle-pw" onclick="togglePw('loginPassword', this)"><i class="fa-regular fa-eye"></i></span>
+            </div>
+            <button type="submit" class="auth-submit">Enter Dashboard</button>
+            <div>
+              <a href="{% url 'reset_password' %}" style="font-size: 0.9rem; color: #3498db; display: inline-block; margin-top: 15px; text-decoration: none;">Forgot Password?</a>
+            </div>
+          </form>
+        </div>
+
+        <div class="auth-panel" id="panelSignup">
+          <form method="POST">
+            {% csrf_token %}
+            <label style="display:block; margin-bottom: 12px; font-size: 0.8rem; font-weight: 700; color: var(--text-secondary);">ACCOUNT TYPE:</label>
+            <div class="role-selector">
+              <label class="role-option">
+                <input type="radio" name="role_selection" value="landlord" checked />
+                <span>Landlord</span>
+              </label>
+              <label class="role-option">
+                <input type="radio" name="role_selection" value="tenant" />
+                <span>Tenant</span>
+              </label>
+              <label class="role-option">
+                <input type="radio" name="role_selection" value="maintenance" />
+                <span>Staff</span>
+              </label>
+            </div>
+
+            <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+              <div style="flex: 1;">
+                <label style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary);">First Name</label>
+                <input type="text" name="first_name" placeholder="John" required />
+              </div>
+              <div style="flex: 1;">
+                <label style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary);">Last Name</label>
+                <input type="text" name="last_name" id="lastNameInput" placeholder="Doe" required />
+              </div>
+            </div>
+
+            <div class="auth-field">
+              <label>Username</label>
+              <input type="text" name="username" placeholder="Choose a unique ID" required />
+            </div>
+
+            <div class="auth-field">
+              <label>Email Address</label>
+              <input type="email" name="email" placeholder="email@example.com" required />
+            </div>
+
+            <div id="tenantFields" class="special-fields" style="display: none;">
+              <div class="auth-field">
+                <label>Assigned Property</label>
+                <select name="property_id" class="auth-select">
+                  <option value="">-- Choose Building --</option>
+                  {% for property in properties %}
+                    <option value="{{ property.id }}">{{ property.name }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div class="auth-field">
+                <label>Unit Number</label>
+                <input type="text" name="unit_number" placeholder="e.g. B12" />
+              </div>
+            </div>
+
+            <div id="maintenanceFields" class="special-fields" style="display: none;">
+              <div class="auth-field">
+                <label>Select Your Landlord / Agency</label>
+                <select name="target_landlord" class="auth-select">
+                  <option value="">-- Choose Employer --</option>
+                  {% for landlord in landlords %}
+                    <option value="{{ landlord.id }}">{{ landlord.get_full_name }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div class="auth-field">
+                <label>Trade / Specialization</label>
+                <input type="text" name="specialization" placeholder="e.g. Plumber, Electrician" />
+              </div>
+            </div>
+
+            <div class="auth-field">
+              <label>Password</label>
+              <input type="password" name="password1" id="signupPassword" required />
+              <span class="toggle-pw" onclick="togglePw('signupPassword', this)"><i class="fa-regular fa-eye"></i></span>
+            </div>
+
+            <div class="auth-field">
+              <label>Confirm Password</label>
+              <input type="password" name="password2" id="signupConfirm" required />
+              <span class="toggle-pw" onclick="togglePw('signupConfirm', this)"><i class="fa-regular fa-eye"></i></span>
+            </div>
+
+            <button type="submit" name="signup_submit" class="auth-submit">Create Account</button>
+          </form>
+        </div>
+      </div>
     </div>
 
     <script>
-        function switchTab(tab) {
-            const btnL = document.getElementById('tabLogin');
-            const btnS = document.getElementById('tabSignup');
-            const panelL = document.getElementById('panelLogin');
-            const panelS = document.getElementById('panelSignup');
-            
-            if (tab === 'login') {
-                btnL.classList.add('active'); btnS.classList.remove('active');
-                panelL.classList.add('active'); panelS.classList.remove('active');
-            } else {
-                btnS.classList.add('active'); btnL.classList.remove('active');
-                panelS.classList.add('active'); panelL.classList.remove('active');
-            }
+      function switchTab(tab) {
+        const btnL = document.getElementById('tabLogin')
+        const btnS = document.getElementById('tabSignup')
+        const panelL = document.getElementById('panelLogin')
+        const panelS = document.getElementById('panelSignup')
+      
+        if (tab === 'login') {
+          btnL.classList.add('active')
+          btnS.classList.remove('active')
+          panelL.classList.add('active')
+          panelS.classList.remove('active')
+        } else {
+          btnS.classList.add('active')
+          btnL.classList.remove('active')
+          panelS.classList.add('active')
+          panelL.classList.remove('active')
         }
-
-        function togglePw(id, el) {
-            const input = document.getElementById(id);
-            if (input.type === 'password') { input.type = 'text'; el.innerText = '🙈'; }
-            else { input.type = 'password'; el.innerText = '👁️'; }
+      }
+      
+      // Updated for Font Awesome icons
+      function togglePw(id, el) {
+        const input = document.getElementById(id)
+        const icon = el.querySelector('i') // Target the <i> tag inside the span
+      
+        if (input.type === 'password') {
+          input.type = 'text'
+          icon.classList.remove('fa-eye')
+          icon.classList.add('fa-eye-slash')
+        } else {
+          input.type = 'password'
+          icon.classList.remove('fa-eye-slash')
+          icon.classList.add('fa-eye')
         }
-
-        // Handle Role Toggles
-        const roleRadios = document.querySelectorAll('input[name="role_selection"]');
-        const tFields = document.getElementById('tenantFields');
-        const mFields = document.getElementById('maintenanceFields');
-        const lnInput = document.getElementById('lastNameInput');
-
-        roleRadios.forEach(radio => {
-            radio.addEventListener('change', function() {
-                tFields.style.display = 'none';
-                mFields.style.display = 'none';
-                
-                if (this.value === 'tenant') {
-                    tFields.style.display = 'block';
-                    lnInput.placeholder = "Tenant";
-                } else if (this.value === 'maintenance') {
-                    mFields.style.display = 'block';
-                    lnInput.placeholder = "Technician";
-                } else {
-                    lnInput.placeholder = "Landlord";
-                }
-            });
-        });
-
-        // Auto-dismiss messages after 5 seconds
-        setTimeout(function() {
-            const container = document.getElementById('django-messages-container');
-            if (container) {
-                container.style.transition = 'opacity 0.5s ease';
-                container.style.opacity = '0';
-                setTimeout(() => container.remove(), 500);
-            }
-        }, 5000);
+      }
+      
+      // Handle Role Toggles
+      const roleRadios = document.querySelectorAll('input[name="role_selection"]')
+      const tFields = document.getElementById('tenantFields')
+      const mFields = document.getElementById('maintenanceFields')
+      const lnInput = document.getElementById('lastNameInput')
+      
+      roleRadios.forEach((radio) => {
+        radio.addEventListener('change', function () {
+          tFields.style.display = 'none'
+          mFields.style.display = 'none'
+      
+          if (this.value === 'tenant') {
+            tFields.style.display = 'block'
+            lnInput.placeholder = 'Tenant'
+          } else if (this.value === 'maintenance') {
+            mFields.style.display = 'block'
+            lnInput.placeholder = 'Technician'
+          } else {
+            lnInput.placeholder = 'Landlord'
+          }
+        })
+      })
+      
+      // Auto-dismiss messages after 5 seconds
+      setTimeout(function () {
+        const container = document.getElementById('django-messages-container')
+        if (container) {
+          container.style.transition = 'opacity 0.5s ease'
+          container.style.opacity = '0'
+          setTimeout(() => container.remove(), 500)
+        }
+      }, 5000)
     </script>
-</body>
+  </body>
 </html>

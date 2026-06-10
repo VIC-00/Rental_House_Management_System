@@ -127,3 +127,6 @@ STATICFILES_DIRS = [
 ]
 
 AUTH_USER_MODEL = 'accounts.CustomUser'
+
+# During development, print emails to the console
+EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
