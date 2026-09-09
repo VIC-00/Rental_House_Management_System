@@ -11,7 +11,7 @@ from django.db.models import Sum, Count, Q, Avg, F, ProtectedError
 from .models import Property, Tenant, Payment, MaintenanceRequest, CustomUser, SentMessage, Announcement
 from .forms import PropertyForm, AddTenantFullForm, UserSignupForm, PaymentForm, MaintenanceForm, TenantMaintenanceRequestForm, AnnouncementForm, MoveOutRequestForm, UserUpdateForm,TenantPaymentForm, MaintenanceTaskUpdateForm, MaintenanceAssignmentForm, AddStaffForm
 from django.urls import reverse
-from django.http import HttpResponse
+from django.http import HttpResponse, JsonResponse
 from django.core.mail import send_mail
 from django.conf import settings
 from django.utils import timezone
@@ -87,14 +87,14 @@ def login_view(request):
                     messages.success(request, "Staff registration received. Your target landlord will review your application.")
                     return redirect('login')
                 
-                # 🔑 LANDLORD SIGNUP
+                # 🔑 LANDLORD SIGNUP — pending admin approval
                 else:
                     user = form.save(commit=False)
                     user.role = 'landlord'
+                    user.is_approved = False
                     user.save()
-                    login(request, user)
-                    messages.success(request, "Landlord account created successfully!")
-                    return redirect('dashboard')
+                    messages.success(request, "Landlord account created! An admin will review and approve your account shortly.")
+                    return redirect('login')
             else:
                 for field, errors in form.errors.items():
                     messages.error(request, f"{field.replace('_', ' ').title()}: {errors[0]}")
@@ -108,6 +108,11 @@ def login_view(request):
             user_obj = CustomUser.objects.filter(Q(username=identifier) | Q(email=identifier)).first()
 
             if user_obj:
+                # Security: Block unapproved landlords
+                if user_obj.role == 'landlord' and not user_obj.is_approved:
+                    messages.warning(request, "Your landlord account is still awaiting admin approval. Please check back soon.")
+                    return redirect('login')
+
                 # Security: Block inactive maintenance staff (not yet approved by landlord)
                 if not user_obj.is_active and user_obj.role == 'maintenance':
                     messages.warning(request, "Your staff account is still awaiting approval.")
@@ -148,54 +153,20 @@ def login_view(request):
     })
 
 def logout_view(request):
-    logout(request)
+    if request.method == 'POST':
+        logout(request)
+        return redirect('login')
+    # Fallback for any stale GET links — just redirect to login
     return redirect('login')
 
 @login_required
 def profile_settings(request):
     """
-    Handles both profile information updates and secure password changes 
-    on a single page for the logged-in user.
+    Redirects to the main settings page which handles all profile
+    and password changes. Kept for backwards compatibility with any
+    existing links to /profile/settings/.
     """
-    if request.method == 'POST':
-        # 1. Handle Profile Info Update (First Name, Email, Phone, etc.)
-        if 'update_profile' in request.POST:
-            profile_form = UserUpdateForm(request.POST, instance=request.user)
-            # Initialize the password form so it's available in the context if validation fails
-            password_form = PasswordChangeForm(request.user)
-            
-            if profile_form.is_valid():
-                profile_form.save()
-                messages.success(request, 'Your profile details have been updated!')
-                return redirect('profile_settings')
-            else:
-                messages.error(request, 'Please correct the profile errors below.')
-        
-        # 2. Handle Password Change using Django's built-in validation
-        elif 'change_password' in request.POST:
-            password_form = PasswordChangeForm(request.user, request.POST)
-            # Initialize the profile form so it's available in the context if validation fails
-            profile_form = UserUpdateForm(instance=request.user)
-            
-            if password_form.is_valid():
-                user = password_form.save()
-                #  Keeps the user logged in by updating the session hash
-                update_session_auth_hash(request, user)
-                messages.success(request, 'Your password was successfully updated!')
-                return redirect('profile_settings')
-            else:
-                messages.error(request, 'Password change failed. See errors below.')
-
-    # If GET request, pre-fill forms with current user data
-    else:
-        profile_form = UserUpdateForm(instance=request.user)
-        password_form = PasswordChangeForm(request.user)
-
-    return render(request, 'profile_settings.html', {
-        'profile_form': profile_form,
-        'password_form': password_form,
-        'tenant': getattr(request.user, 'tenant_profile', None) # Useful if you need tenant-specific info
-    })
+    return redirect('settings')
 
 @login_required(login_url='login')
 def settings_view(request):
@@ -249,7 +220,9 @@ def settings_view(request):
 # --- 2. DASHBOARD ---
 @login_required(login_url='login') 
 def dashboard_view(request):
-    if request.user.role != 'landlord':
+    if request.user.role == 'maintenance':
+        return redirect('maintenance_dashboard')
+    elif request.user.role != 'landlord':
         return redirect('tenant_dashboard')
 
     my_properties = Property.objects.filter(landlord=request.user)
@@ -432,9 +405,12 @@ def payments_view(request):
         except ValueError:
             pass
 
-    # 3. ⭐ NEW: Filter by "What they paid for" (Billing Month)
+    # 3. Filter by "What they paid for" (Billing Month)
     if billing_month_filter and billing_month_filter != "":
-        payments = payments.filter(for_month=billing_month_filter)
+        try:
+            payments = payments.filter(for_month=int(billing_month_filter))
+        except ValueError:
+            pass  # Ignore invalid/non-integer values silently
 
     # --- FINANCIAL CALCULATIONS (Keep as is) ---
     expected = Property.objects.filter(landlord=request.user).aggregate(Sum('monthly_revenue'))['monthly_revenue__sum'] or 0
@@ -557,7 +533,7 @@ def reports_view(request):
         total_confirmed_period += collected
         
         # Calculate Stats
-        tenant_count = p.tenant_set.count() # You can also annotate this for more speed!
+        tenant_count = Tenant.objects.filter(assigned_property=p).count()
         efficiency = (collected / p.monthly_revenue * 100) if p.monthly_revenue > 0 else 0
         
         prop_data.append({
@@ -698,7 +674,11 @@ def report_issue(request):
     if request.user.role != 'tenant':
         return redirect('dashboard')
     
-    tenant_profile = Tenant.objects.get(user=request.user)
+    try:
+        tenant_profile = Tenant.objects.get(user=request.user)
+    except Tenant.DoesNotExist:
+        messages.error(request, "Error: No tenant profile found for this account.")
+        return redirect('login')
 
     if request.method == 'POST':
         form = TenantMaintenanceRequestForm(request.POST)
@@ -758,6 +738,23 @@ def payment_history(request):
     
     return render(request, 'tenants/payment_history.html', {
         'all_payments': all_payments,
+        'tenant': tenant_profile
+    })
+
+@login_required
+def all_announcements(request):
+    """Shows the full archive of all active announcements for the logged-in tenant."""
+    if request.user.role != 'tenant':
+        return redirect('dashboard')
+
+    tenant_profile = get_object_or_404(Tenant, user=request.user)
+    all_notes = Announcement.objects.filter(
+        Q(is_broadcast=True) | Q(target_property=tenant_profile.assigned_property),
+        is_active=True
+    ).order_by('-date_posted')
+
+    return render(request, 'tenants/all_announcements.html', {
+        'all_notes': all_notes,
         'tenant': tenant_profile
     })
 
@@ -919,7 +916,7 @@ def add_property(request):
 @login_required(login_url='login')
 def add_tenant(request):
     if request.method == 'POST':
-        form = AddTenantFullForm(request.POST)
+        form = AddTenantFullForm(request.POST, user=request.user)
         if form.is_valid():
             email = form.cleaned_data['email']
             phone = form.cleaned_data['phone_number']
@@ -953,6 +950,10 @@ def add_tenant(request):
             # ⭐ Optional Lease End Handling:
             # If the landlord leaves it blank in the form, it saves as None/Null
             tenant.lease_end = form.cleaned_data.get('lease_end')
+            
+            # A landlord manually adding a tenant is implicitly approving them.
+            # Set to active so they can log in immediately.
+            tenant.status = 'active'
             
             tenant.save()
             
@@ -1055,7 +1056,7 @@ def delete_property(request, pk):
             return redirect('properties')
         except ProtectedError:
             # ⭐ THE FIX: Catch the error if tenants are still assigned
-            first_tenant = property_obj.tenant_set.first()
+            first_tenant = Tenant.objects.filter(assigned_property=property_obj).first()
             tenant_name = first_tenant.user.get_full_name() if first_tenant else "active tenants"
             
             messages.error(request, 
@@ -1240,6 +1241,7 @@ def delete_maintenance(request, pk):
         
     return render(request, 'confirm_delete.html', {
         'obj': f"Request #MNT-{maintenance_req.id}", 
+        'type': 'maintenance request',
         'back_url': reverse('maintenance') 
     })
 
@@ -1395,7 +1397,7 @@ def assign_maintenance(request, pk):
         messages.error(request, "Access denied.")
         return redirect('dashboard')
         
-    task = get_object_or_404(MaintenanceRequest, pk=pk)
+    task = get_object_or_404(MaintenanceRequest, pk=pk, tenant__assigned_property__landlord=request.user)
     
     if request.method == 'POST':
         #  Pass 'user' so the form can filter the technicians dropdown
@@ -1643,7 +1645,7 @@ def export_revenue_csv(request):
         collected = Payment.objects.filter(
             tenant__assigned_property=p, status='confirmed', date__date__range=[start_date, end_date]
         ).aggregate(Sum('amount'))['amount__sum'] or 0
-        tenant_count = p.tenant_set.count()
+        tenant_count = Tenant.objects.filter(assigned_property=p).count()
         occ = (tenant_count / p.total_units * 100) if p.total_units > 0 else 0
         writer.writerow([p.name, p.monthly_revenue, collected, p.monthly_revenue - collected, f"{occ:.1f}%"])
     return response
@@ -1743,7 +1745,7 @@ def send_mass_message(request):
                 sms_count += 1
 
         # Calculate absolute deliveries
-        total_delivered = max(email_count, sms_count) if len(methods) > 1 else (email_count + sms_count)
+        total_delivered = email_count + sms_count
 
         # Save record log to tracking ledger
         SentMessage.objects.create(
@@ -1880,3 +1882,203 @@ def generate_invoice(request, pk):
     }
     
     return render(request, 'invoice.html', context)
+
+
+# ==============================================================================
+# --- AI FEATURES ---
+# ==============================================================================
+
+@login_required
+def ai_draft_announcement(request):
+    """
+    AJAX endpoint: POST {topic: "..."} → JSON {title, content} drafted by Gemini.
+    Only landlords can call this.
+    """
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Method not allowed.'}, status=405)
+
+    if request.user.role != 'landlord':
+        return JsonResponse({'error': 'Forbidden.'}, status=403)
+
+    try:
+        body = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid JSON body.'}, status=400)
+
+    topic = body.get('topic', '').strip()
+    if not topic:
+        return JsonResponse({'error': 'Please provide a topic.'}, status=400)
+
+    try:
+        from .ai_utils import draft_announcement
+        result = draft_announcement(topic)
+        return JsonResponse(result)
+    except ValueError as e:
+        # API key not configured
+        from .ai_utils import friendly_ai_error
+        return JsonResponse({'error': friendly_ai_error(e)}, status=503)
+    except Exception as e:
+        from .ai_utils import friendly_ai_error
+        return JsonResponse({'error': friendly_ai_error(e)}, status=502)
+
+@login_required
+def ai_classify_maintenance(request):
+    """
+    AJAX endpoint: POST {issue: "...", description: "..."} 
+    → JSON {category, priority, reason} suggested by AI.
+    Only tenants can call this (they are the ones submitting requests).
+    """
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Method not allowed.'}, status=405)
+
+    if request.user.role != 'tenant':
+        return JsonResponse({'error': 'Forbidden.'}, status=403)
+
+    try:
+        body = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid JSON body.'}, status=400)
+
+    issue = body.get('issue', '').strip()
+    description = body.get('description', '').strip()
+
+    if not issue and not description:
+        return JsonResponse({'error': 'Please fill in the issue and description first.'}, status=400)
+
+    try:
+        from .ai_utils import classify_maintenance
+        result = classify_maintenance(issue or description, description or issue)
+        return JsonResponse(result)
+    except ValueError as e:
+        from .ai_utils import friendly_ai_error
+        return JsonResponse({'error': friendly_ai_error(e)}, status=503)
+    except Exception as e:
+        from .ai_utils import friendly_ai_error
+        return JsonResponse({'error': friendly_ai_error(e)}, status=502)
+
+
+@login_required
+def ai_tenant_chat(request):
+    """
+    AJAX endpoint for the tenant FAQ chatbot.
+    POST {message: "...", history: [...]} → JSON {reply: "..."}
+    Only tenants can call this.
+    """
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Method not allowed.'}, status=405)
+
+    if request.user.role != 'tenant':
+        return JsonResponse({'error': 'Forbidden.'}, status=403)
+
+    try:
+        body = json.loads(request.body)
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid JSON body.'}, status=400)
+
+    message = body.get('message', '').strip()
+    history = body.get('history', [])
+
+    if not message:
+        return JsonResponse({'error': 'Message is empty.'}, status=400)
+
+    # Build tenant context from DB — server-side so it cannot be tampered with
+    try:
+        tenant = Tenant.objects.select_related('assigned_property', 'user').get(user=request.user)
+    except Tenant.DoesNotExist:
+        return JsonResponse({'error': 'No tenant profile found.'}, status=404)
+
+    active_requests_count = MaintenanceRequest.objects.filter(
+        tenant=tenant
+    ).exclude(status='completed').count()
+
+    tenant_context = {
+        'name':            tenant.user.get_full_name() or tenant.user.username,
+        'unit_number':     tenant.unit_number or 'N/A',
+        'property_name':   tenant.assigned_property.name if tenant.assigned_property else 'N/A',
+        'rent_amount':     str(tenant.rent_amount),
+        'balance':         str(tenant.balance),
+        'move_in_date':    str(tenant.move_in_date) if tenant.move_in_date else 'N/A',
+        'lease_end':       str(tenant.lease_end) if tenant.lease_end else 'Not specified',
+        'active_requests': active_requests_count,
+        'today':           str(timezone.now().date()),
+    }
+
+    try:
+        from .ai_utils import tenant_chat
+        reply = tenant_chat(message, tenant_context, history)
+        return JsonResponse({'reply': reply})
+    except ValueError as e:
+        from .ai_utils import friendly_ai_error
+        return JsonResponse({'error': friendly_ai_error(e)}, status=503)
+    except Exception as e:
+        from .ai_utils import friendly_ai_error
+        return JsonResponse({'error': friendly_ai_error(e)}, status=502)
+
+
+@login_required
+def ai_dashboard_insights(request):
+    """
+    AJAX endpoint: GET → JSON {insight: "...", cached: bool}
+    Collects real DB metrics for the landlord and returns an AI briefing.
+    Result is cached per landlord for 2 hours to conserve API quota.
+    Pass ?refresh=1 to force a fresh call (used by the Refresh button).
+    Only landlords can call this.
+    """
+    from django.core.cache import cache
+
+    if request.method != 'GET':
+        return JsonResponse({'error': 'Method not allowed.'}, status=405)
+
+    if request.user.role != 'landlord':
+        return JsonResponse({'error': 'Forbidden.'}, status=403)
+
+    cache_key   = f'ai_insights_{request.user.pk}'
+    force_fresh = request.GET.get('refresh') == '1'
+
+    # Serve from cache unless the landlord explicitly hits Refresh
+    if not force_fresh:
+        cached = cache.get(cache_key)
+        if cached:
+            return JsonResponse({'insight': cached, 'cached': True})
+
+    my_properties   = Property.objects.filter(landlord=request.user)
+    today           = timezone.now()
+    seven_days_ago  = today - timedelta(days=7)
+
+    active_tenants      = Tenant.objects.filter(assigned_property__in=my_properties, status='active')
+    tenants_with_balance = active_tenants.filter(balance__gt=0)
+    total_outstanding   = tenants_with_balance.aggregate(total=Sum('balance'))['total'] or 0
+    monthly_collection  = Payment.objects.filter(
+        tenant__assigned_property__in=my_properties,
+        status='confirmed',
+        date__year=today.year,
+        date__month=today.month,
+    ).aggregate(total=Sum('amount'))['total'] or 0
+
+    maint_qs = MaintenanceRequest.objects.filter(tenant__assigned_property__in=my_properties)
+
+    data = {
+        'total_properties':        my_properties.count(),
+        'active_tenants':          active_tenants.count(),
+        'tenants_with_balance':    tenants_with_balance.count(),
+        'total_outstanding':       float(total_outstanding),
+        'monthly_collection':      float(monthly_collection),
+        'pending_maintenance':     maint_qs.filter(status='pending').count(),
+        'in_progress_maintenance': maint_qs.filter(status='in_progress').count(),
+        'stale_maintenance':       maint_qs.filter(status='pending', date_reported__lt=seven_days_ago).count(),
+        'move_out_notices':        Tenant.objects.filter(assigned_property__in=my_properties, status='notice_given').count(),
+        'today':                   today.strftime('%B %d, %Y'),
+    }
+
+    try:
+        from .ai_utils import generate_dashboard_insights
+        insight = generate_dashboard_insights(data)
+        # Cache result for 2 hours (7200 seconds)
+        cache.set(cache_key, insight, 7200)
+        return JsonResponse({'insight': insight, 'cached': False})
+    except ValueError as e:
+        from .ai_utils import friendly_ai_error
+        return JsonResponse({'error': friendly_ai_error(e)}, status=503)
+    except Exception as e:
+        from .ai_utils import friendly_ai_error
+        return JsonResponse({'error': friendly_ai_error(e)}, status=502)

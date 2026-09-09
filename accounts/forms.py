@@ -299,19 +299,14 @@ class MoveOutRequestForm(forms.ModelForm):
 # ==============================================================================
 
 class PaymentForm(forms.ModelForm):
-    # ⭐ Define year choices for the dropdown (Current year +/- 1)
-    current_year = datetime.date.today().year
-    YEAR_CHOICES = [(y, y) for y in range(current_year - 1, current_year + 2)]
-
+    # for_year choices are built dynamically in __init__ so they always reflect the real current year
     for_year = forms.ChoiceField(
-        choices=YEAR_CHOICES,
-        initial=current_year,
+        choices=[],  # populated in __init__
         widget=forms.Select(attrs={'class': 'form-control'})
     )
 
     class Meta:
         model = Payment
-        # ⭐ Added for_month and for_year to the fields
         fields = ['tenant', 'amount', 'for_month', 'for_year', 'transaction_id', 'method', 'status']
         widgets = {
             'tenant': forms.Select(attrs={'class': 'form-control'}),
@@ -321,15 +316,19 @@ class PaymentForm(forms.ModelForm):
             'method': forms.Select(attrs={'class': 'form-control'}),
             'status': forms.Select(attrs={'class': 'form-control'}),
         }
+
     def clean_amount(self):
         amount = self.cleaned_data.get('amount')
         if amount is not None and amount <= 0:
             raise forms.ValidationError("Payment amount must be a positive number greater than zero.")
         return amount
 
-
     def __init__(self, *args, **kwargs):
         super(PaymentForm, self).__init__(*args, **kwargs)
+        # Build year choices fresh so the correct year is always shown
+        current_year = datetime.date.today().year
+        self.fields['for_year'].choices = [(y, y) for y in range(current_year - 1, current_year + 2)]
+        self.fields['for_year'].initial = current_year
         # Tell Django to stop forcing this field to be required by default
         self.fields['transaction_id'].required = False
 
@@ -364,18 +363,14 @@ class PaymentForm(forms.ModelForm):
         return None
 
 class TenantPaymentForm(forms.ModelForm):
-    current_year = datetime.date.today().year
-    YEAR_CHOICES = [(y, y) for y in range(current_year - 1, current_year + 2)]
-
+    # for_year choices are built dynamically in __init__ so they always reflect the real current year
     for_year = forms.ChoiceField(
-        choices=YEAR_CHOICES,
-        initial=current_year,
+        choices=[],  # populated in __init__
         widget=forms.Select(attrs={'class': 'form-control'})
     )
 
     class Meta:
         model = Payment
-        # ⭐ Tenants now specify which month they are paying for
         fields = ['amount', 'for_month', 'for_year', 'transaction_id', 'method']
         widgets = {
             'amount': forms.NumberInput(attrs={'class': 'form-control', 'placeholder': 'Amount in KES'}),
@@ -388,6 +383,13 @@ class TenantPaymentForm(forms.ModelForm):
             'for_month': 'Paying for Month',
             'for_year': 'Year'
         }
+
+    def __init__(self, *args, **kwargs):
+        super(TenantPaymentForm, self).__init__(*args, **kwargs)
+        # Build year choices fresh so the correct year is always shown
+        current_year = datetime.date.today().year
+        self.fields['for_year'].choices = [(y, y) for y in range(current_year - 1, current_year + 2)]
+        self.fields['for_year'].initial = current_year
 
     def clean(self):
         cleaned_data = super().clean()

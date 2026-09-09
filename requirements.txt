@@ -1,6 +1,6 @@
 asgiref==3.8.1
 Django==6.0.0
-django-crispy-forms==2.3
-crispy-bootstrap5==2024.10
 sqlparse==0.5.3
 tzdata==2025.1
+google-genai>=2.0.0
+python-dotenv>=1.0.0

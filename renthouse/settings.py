@@ -11,6 +11,10 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 import os
 from pathlib import Path
+from dotenv import load_dotenv
+
+# Load variables from .env file (if it exists)
+load_dotenv()
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -20,12 +24,12 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-q78l7zyxzv&@lr_r@w*8*!ru^1y#((1op++ywy=aa9c_^mr6cd'
+SECRET_KEY = os.environ.get('SECRET_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.environ.get('DEBUG', 'True') == 'True'
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
 
 
 # Application definition
@@ -126,7 +130,26 @@ STATICFILES_DIRS = [
     os.path.join(BASE_DIR, 'static'),
 ]
 
+# Where collectstatic gathers all static files for production
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+
 AUTH_USER_MODEL = 'accounts.CustomUser'
 
 # During development, print emails to the console
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+
+# --- AI / Gemini Integration ---
+# Key is loaded from .env file — safe to push settings.py to GitHub
+GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY', '')
+
+# --- Cache (file-based so it survives server reloads) ---
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.filebased.FileBasedCache',
+        'LOCATION': os.path.join(BASE_DIR, '.cache'),
+        'TIMEOUT': 7200,  # 2 hours default
+        'OPTIONS': {
+            'MAX_ENTRIES': 500,
+        }
+    }
+}

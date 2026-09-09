@@ -48,7 +48,7 @@
                                 </button>
                                 <form action="{% url 'reject_tenant_signup' pending.id %}" method="POST" style="display:inline;">
                                     {% csrf_token %}
-                                    <button type="submit" class="btn btn-danger btn-small" onclick="return confirm('Reject and delete this account?')">Reject</button>
+                                    <button type="submit" class="btn btn-danger btn-small">Reject</button>
                                 </form>
                             </div>
                         </td>
@@ -135,7 +135,7 @@
                                     </button>
                                 {% endif %}
                                 <a href="{% url 'edit_tenant' tenant.pk %}" class="btn btn-primary btn-small">Edit</a>
-                                <a href="{% url 'delete_tenant' tenant.pk %}" class="btn btn-danger btn-small" onclick="return confirm('Permanently remove this tenant?')">Remove</a>
+                                <a href="{% url 'delete_tenant' tenant.pk %}" class="btn btn-danger btn-small">Remove</a>
                             </div>
                         </td>
                     </tr>
@@ -259,9 +259,9 @@
         }
     });
 
-    window.onclick = (e) => {
+    window.addEventListener('click', (e) => {
         if (e.target == reviewModal) reviewModal.style.display = "none";
         if (e.target == signupModal) signupModal.style.display = "none";
-    }
+    });
 </script>
 {% endblock %}

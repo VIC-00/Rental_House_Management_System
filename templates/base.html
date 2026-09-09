@@ -176,11 +176,14 @@
                 </a>
             {% endif %}
 
-            <a href="{% url 'logout' %}" style="text-decoration: none; margin-top: auto;">
-                <div class="nav-item" style="color:rgba(255,100,100,0.85); border-top: 1px solid rgba(255,255,255,0.08);">
-                    <span class="icon"><i class="fa-solid fa-right-from-bracket"></i></span> <span>Sign Out</span>
-                </div>
-            </a>
+            <form method="POST" action="{% url 'logout' %}" style="margin-top: auto;">
+                {% csrf_token %}
+                <button type="submit" style="width: 100%; background: none; border: none; cursor: pointer; padding: 0; text-align: left; text-decoration: none;">
+                    <div class="nav-item" style="color:rgba(255,100,100,0.85); border-top: 1px solid rgba(255,255,255,0.08);">
+                        <span class="icon"><i class="fa-solid fa-right-from-bracket"></i></span> <span>Sign Out</span>
+                    </div>
+                </button>
+            </form>
         </div>
 
         <div class="main-content">
@@ -204,7 +207,10 @@
                         
                         <div id="profileDropdownMenu" style="display: none; position: absolute; top: 120%; right: 0; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; box-shadow: 0 8px 25px rgba(0,0,0,0.2); min-width: 160px; z-index: 1000; overflow: hidden;">
                             <a href="{% url 'settings' %}" style="display: block; padding: 12px 16px; color: var(--text-primary); text-decoration: none; font-size: 13px;">Settings</a>
-                            <a href="{% url 'logout' %}" style="display: block; padding: 12px 16px; color: #e74c3c; text-decoration: none; font-size: 13px;">Sign Out</a>
+                            <form method="POST" action="{% url 'logout' %}" style="margin: 0;">
+                                {% csrf_token %}
+                                <button type="submit" style="width: 100%; background: none; border: none; cursor: pointer; display: block; padding: 12px 16px; color: #e74c3c; text-decoration: none; font-size: 13px; text-align: left;">Sign Out</button>
+                            </form>
                         </div>
                     </div>
                 </div>
@@ -215,7 +221,7 @@
                     <div id="django-messages-container" style="position: fixed; top: 20px; right: 20px; z-index: 9999; width: 350px;">
                         {% for message in messages %}
                             <div class="auth-alert show {{ message.tags }}" 
-                                 style="margin-bottom: 10px; border-radius: 8px; padding: 15px; background: #ffffff; color: #333; box-shadow: 0 10px 30px rgba(0,0,0,0.15); border-left: 6px solid #2ecc71;">
+                                 style="margin-bottom: 10px; border-radius: 8px; padding: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.15);">
                                 <span style="font-weight: 600;">{{ message }}</span>
                             </div>
                         {% endfor %}
@@ -325,7 +331,7 @@
             const hideModal = () => massModal.style.display = "none";
             if (closeModal) closeModal.onclick = hideModal;
             if (cancelBtn) cancelBtn.onclick = hideModal;
-            window.onclick = (e) => { if (e.target == massModal) hideModal(); }
+            window.addEventListener('click', (e) => { if (e.target == massModal) hideModal(); });
         }
     });
 

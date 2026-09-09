@@ -82,6 +82,7 @@ urlpatterns = [
     path('tenant/report-payment/', views.report_payment, name='report_payment'),
     path('tenant/payments/history/', views.payment_history, name='payment_history'),
     path('tenant/repairs/history/', views.maintenance_history, name='maintenance_history'),
+    path('tenant/announcements/', views.all_announcements, name='all_announcements'),
 
     # ==========================================================================
     # --- 7. MAINTENANCE STAFF PORTAL ---
@@ -116,4 +117,12 @@ urlpatterns = [
     path('reports/export/revenue/', views.export_revenue_csv, name='export_revenue_csv'),
     path('reports/export/arrears/', views.export_arrears_csv, name='export_arrears_csv'),
     path('send-mass-message/', views.send_mass_message, name='send_mass_message'),
+
+    # ==========================================================================
+    # --- 10. AI FEATURES ---
+    # ==========================================================================
+    path('ai/draft-announcement/', views.ai_draft_announcement, name='ai_draft_announcement'),
+    path('ai/classify-maintenance/', views.ai_classify_maintenance, name='ai_classify_maintenance'),
+    path('ai/tenant-chat/', views.ai_tenant_chat, name='ai_tenant_chat'),
+    path('ai/dashboard-insights/', views.ai_dashboard_insights, name='ai_dashboard_insights'),
 ]

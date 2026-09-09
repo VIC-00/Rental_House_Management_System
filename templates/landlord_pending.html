@@ -1,15 +1,13 @@
 {% extends 'base.html' %}
 {% block content %}
 <div class="card" style="max-width: 600px; margin: 50px auto; text-align: center; padding: 40px;">
-    <h1 style="font-size: 3rem;">⏳</h1>
+    <h1 style="font-size: 3rem;">🕐</h1>
     <h2>Account Pending Approval</h2>
     <p style="color: var(--text-secondary); margin: 20px 0;">
-        Hello <strong>{{ tenant.user.first_name }}</strong>, your account for 
-        <strong>{{ tenant.assigned_property.name }} (Unit {{ tenant.unit_number }})</strong> 
-        has been created successfully.
+        Hello <strong>{{ user.first_name }}</strong>, your landlord account has been created successfully.
     </p>
     <div style="background: rgba(243, 156, 18, 0.1); color: #f39c12; padding: 15px; border-radius: 8px;">
-        Management is currently verifying your details. You will receive access once your unit and rent are confirmed.
+        A system administrator will review and approve your account shortly. You will be able to log in once approved.
     </div>
     <form method="POST" action="{% url 'logout' %}" style="margin-top: 20px; display: inline;">
         {% csrf_token %}

@@ -5,6 +5,13 @@ from django.utils import timezone
 from django.conf import settings
 from decimal import Decimal
 
+# Named callables for model field defaults — lambdas can't be serialized by migrations
+def get_current_month():
+    return timezone.now().month
+
+def get_current_year():
+    return timezone.now().year
+
 # ==============================================================================
 # --- 1. CORE IDENTITY (User Accounts) ---
 # ==============================================================================
@@ -31,6 +38,10 @@ class CustomUser(AbstractUser):
     )
 
     must_change_password = models.BooleanField(default=False)
+    is_approved = models.BooleanField(
+        default=False,
+        help_text="Landlord accounts require admin approval before gaining access."
+    )
     
     def __str__(self):
         return f"{self.username} ({self.get_role_display()})"
@@ -45,8 +56,6 @@ class Property(models.Model):
         on_delete=models.CASCADE, 
         limit_choices_to={'role': 'landlord'},
         related_name='owned_properties',
-        null=True,
-        blank=True
     )
     name = models.CharField(max_length=100)
     location = models.CharField(max_length=200)
@@ -81,6 +90,9 @@ class RentCharge(models.Model):
 
     class Meta:
         unique_together = ('tenant', 'month', 'year')
+
+    def __str__(self):
+        return f"{self.tenant} - {self.month}/{self.year}"
 
 class Tenant(models.Model):
     STATUS_CHOICES = [
@@ -276,8 +288,8 @@ class Payment(models.Model):
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     date = models.DateTimeField(auto_now_add=True)
     
-    for_month = models.IntegerField(choices=MONTH_CHOICES, default=timezone.now().month)
-    for_year = models.IntegerField(default=timezone.now().year)
+    for_month = models.IntegerField(choices=MONTH_CHOICES, default=get_current_month)
+    for_year = models.IntegerField(default=get_current_year)
     
     method = models.CharField(max_length=50, choices=METHOD_CHOICES, default='M-Pesa') 
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
@@ -352,6 +364,9 @@ class SentMessage(models.Model):
     delivery_method = models.CharField(max_length=50) 
     sent_at = models.DateTimeField(auto_now_add=True)
     sender = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
+
+    def __str__(self):
+        return f"{self.subject} (sent {self.sent_at.strftime('%Y-%m-%d')})"
 
 class Announcement(models.Model):
     title = models.CharField(max_length=200)

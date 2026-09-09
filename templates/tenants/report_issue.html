@@ -5,8 +5,8 @@
     <div class="card" style="max-width: 550px; margin: 30px auto; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); border: none; background: var(--bg-secondary);">
         
         <div class="card-header" style="padding: 25px; border-bottom: 1px solid var(--border-color); display: flex; align-items: center; gap: 15px;">
-            <div style="height: 45px; width: 45px; background: rgba(52, 152, 219, 0.1); border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 1.5rem;">
-                🔧
+            <div style="height: 45px; width: 45px; background: rgba(52, 152, 219, 0.1); border-radius: 10px; display: flex; align-items: center; justify-content: center;">
+                <i class="fa-solid fa-screwdriver-wrench" style="font-size: 1.3rem; color: #3498db;"></i>
             </div>
             <div>
                 <h2 style="font-family: 'Playfair Display', serif; color: var(--text-primary); margin: 0; font-size: 1.4rem;">
@@ -17,7 +17,7 @@
         </div>
 
         <div class="card-body" style="padding: 30px;">
-            <form method="POST">
+            <form method="POST" id="maintenanceForm">
                 {% csrf_token %}
                 
                 {% if form.non_field_errors %}
@@ -26,38 +26,96 @@
                     </div>
                 {% endif %}
 
-                {% for field in form %}
+                {# --- Issue field --- #}
                 <div class="form-group" style="margin-bottom: 22px;">
                     <label style="display: block; font-weight: 700; margin-bottom: 8px; color: var(--text-primary); font-size: 0.9rem; letter-spacing: 0.3px;">
-                        {{ field.label }}
-                        {% if field.field.required %}<span style="color: #e74c3c;">*</span>{% endif %}
+                        {{ form.issue.label }}<span style="color: #e74c3c;">*</span>
                     </label>
-                    
-                    <div class="custom-input-wrapper">
-                        {{ field }}
-                    </div>
-
-                    {% if field.help_text %}
-                        <small style="color: var(--text-secondary); font-size: 0.75rem; margin-top: 5px; display: block;">{{ field.help_text }}</small>
-                    {% endif %}
-
-                    {% if field.errors %}
+                    <div class="custom-input-wrapper">{{ form.issue }}</div>
+                    {% if form.issue.errors %}
                         <div style="color: #e74c3c; font-size: 0.75rem; margin-top: 6px; font-weight: 600;">
-                            ⚠️ {{ field.errors.0 }}
+                            <i class="fa-solid fa-triangle-exclamation" style="margin-right:4px;"></i>{{ form.issue.errors.0 }}
                         </div>
                     {% endif %}
                 </div>
-                {% endfor %}
 
-                <div style="background: rgba(52, 152, 219, 0.05); border: 1px solid rgba(52, 152, 219, 0.1); padding: 15px; border-radius: 10px; margin-top: 10px; margin-bottom: 25px;">
-                    <p style="margin: 0; font-size: 0.8rem; color: var(--text-secondary); line-height: 1.5;">
-                        <strong>Tip:</strong> Selecting the correct <strong>Category</strong> (e.g., Plumbing or Electrical) helps us dispatch the right technician immediately.
+                {# --- Description field --- #}
+                <div class="form-group" style="margin-bottom: 22px;">
+                    <label style="display: block; font-weight: 700; margin-bottom: 8px; color: var(--text-primary); font-size: 0.9rem; letter-spacing: 0.3px;">
+                        {{ form.description.label }}<span style="color: #e74c3c;">*</span>
+                    </label>
+                    <div class="custom-input-wrapper">{{ form.description }}</div>
+                    {% if form.description.errors %}
+                        <div style="color: #e74c3c; font-size: 0.75rem; margin-top: 6px; font-weight: 600;">
+                            <i class="fa-solid fa-triangle-exclamation" style="margin-right:4px;"></i>{{ form.description.errors.0 }}
+                        </div>
+                    {% endif %}
+                </div>
+
+                {# --- AI Suggestion Panel --- #}
+                <div id="aiSuggestPanel" style="background: var(--bg-primary); border: 1px solid var(--border-color); border-radius: 8px; padding: 14px 16px; margin-bottom: 22px;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <i class="fa-solid fa-wand-magic-sparkles" style="color: var(--text-secondary); font-size: 12px;"></i>
+                            <span style="font-weight: 600; color: var(--text-primary); font-size: 13px;">Auto-classify with AI</span>
+                        </div>
+                        <button type="button" id="aiClassifyBtn" class="btn btn-primary" style="font-size: 12.5px; padding: 6px 14px;">
+                            <i class="fa-solid fa-wand-magic-sparkles" style="margin-right: 5px;"></i>Suggest
+                        </button>
+                    </div>
+                    <p style="font-size: 11.5px; color: var(--text-secondary); margin: 8px 0 0 0;">
+                        Fill in the issue and description above, then click Suggest to auto-fill Category and Priority.
                     </p>
+
+                    {# Result card — hidden until AI responds #}
+                    <div id="aiSuggestResult" style="display: none; margin-top: 12px; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px 14px;">
+                        <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 10px;">
+                            <div style="flex: 1;">
+                                <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 6px;">
+                                    <span style="font-size: 11.5px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Category</span>
+                                    <span id="aiCategory" style="font-size: 12.5px; font-weight: 700; color: var(--text-primary); background: rgba(93,156,236,0.12); border-radius: 20px; padding: 2px 10px;"></span>
+                                    <span style="font-size: 11.5px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px;">Priority</span>
+                                    <span id="aiPriority" style="font-size: 12.5px; font-weight: 700; border-radius: 20px; padding: 2px 10px;"></span>
+                                </div>
+                                <p id="aiReason" style="font-size: 12px; color: var(--text-secondary); margin: 0;"></p>
+                            </div>
+                            <button type="button" id="aiApplyBtn" class="btn btn-primary" style="font-size: 12px; padding: 6px 14px; white-space: nowrap;">
+                                <i class="fa-solid fa-check" style="margin-right:4px;"></i>Apply
+                            </button>
+                        </div>
+                    </div>
+                    <div id="aiSuggestStatus" style="display: none; margin-top: 10px; font-size: 12.5px;"></div>
+                </div>
+
+                {# --- Category field --- #}
+                <div class="form-group" style="margin-bottom: 22px;">
+                    <label style="display: block; font-weight: 700; margin-bottom: 8px; color: var(--text-primary); font-size: 0.9rem; letter-spacing: 0.3px;">
+                        {{ form.category.label }}
+                    </label>
+                    <div class="custom-input-wrapper">{{ form.category }}</div>
+                    {% if form.category.errors %}
+                        <div style="color: #e74c3c; font-size: 0.75rem; margin-top: 6px; font-weight: 600;">
+                            <i class="fa-solid fa-triangle-exclamation" style="margin-right:4px;"></i>{{ form.category.errors.0 }}
+                        </div>
+                    {% endif %}
+                </div>
+
+                {# --- Priority field --- #}
+                <div class="form-group" style="margin-bottom: 22px;">
+                    <label style="display: block; font-weight: 700; margin-bottom: 8px; color: var(--text-primary); font-size: 0.9rem; letter-spacing: 0.3px;">
+                        {{ form.priority.label }}<span style="color: #e74c3c;">*</span>
+                    </label>
+                    <div class="custom-input-wrapper">{{ form.priority }}</div>
+                    {% if form.priority.errors %}
+                        <div style="color: #e74c3c; font-size: 0.75rem; margin-top: 6px; font-weight: 600;">
+                            <i class="fa-solid fa-triangle-exclamation" style="margin-right:4px;"></i>{{ form.priority.errors.0 }}
+                        </div>
+                    {% endif %}
                 </div>
 
                 <div style="display: flex; gap: 12px; border-top: 1px solid var(--border-color); padding-top: 25px;">
                     <button type="submit" class="btn btn-primary" style="flex: 2; padding: 12px; font-weight: 700; font-size: 0.95rem; background: #3498db; border: none; border-radius: 8px; cursor: pointer; transition: background 0.2s;">
-                        Submit Request
+                        <i class="fa-solid fa-paper-plane" style="margin-right: 6px;"></i>Submit Request
                     </button>
                     <a href="{% url 'tenant_dashboard' %}" class="btn btn-secondary" 
                        style="flex: 1; text-decoration: none; padding: 12px; display: flex; align-items: center; justify-content: center; background: var(--bg-primary); color: var(--text-secondary); border: 1px solid var(--border-color); font-size: 0.95rem; font-weight: 600; border-radius: 8px; transition: all 0.2s;">
@@ -70,7 +128,6 @@
 </div>
 
 <style>
-    /* Styling the Django Form Widgets */
     .custom-input-wrapper input, 
     .custom-input-wrapper select, 
     .custom-input-wrapper textarea {
@@ -87,10 +144,7 @@
         box-sizing: border-box;
     }
 
-    .custom-input-wrapper textarea {
-        min-height: 120px;
-        resize: vertical;
-    }
+    .custom-input-wrapper textarea { min-height: 120px; resize: vertical; }
 
     .custom-input-wrapper input:focus, 
     .custom-input-wrapper select:focus, 
@@ -103,10 +157,131 @@
     .btn-primary:hover { background: #2980b9 !important; }
     .btn-secondary:hover { background: var(--border-color) !important; color: var(--text-primary) !important; }
 
-    /* Custom styling for date/time indicators in dark mode if needed */
     [data-theme="dark"] select option {
         background-color: #2c3e50;
         color: white;
     }
 </style>
+
+<script>
+(function () {
+    const classifyBtn  = document.getElementById('aiClassifyBtn');
+    const applyBtn     = document.getElementById('aiApplyBtn');
+    const resultBox    = document.getElementById('aiSuggestResult');
+    const statusEl     = document.getElementById('aiSuggestStatus');
+    const aiCatEl      = document.getElementById('aiCategory');
+    const aiPriEl      = document.getElementById('aiPriority');
+    const aiReasonEl   = document.getElementById('aiReason');
+
+    const issueInput   = document.getElementById('id_issue');
+    const descInput    = document.getElementById('id_description');
+    const catSelect    = document.getElementById('id_category');
+    const priSelect    = document.getElementById('id_priority');
+
+    // Stores the last AI suggestion so Apply can use it
+    let lastSuggestion = null;
+
+    const priorityColors = {
+        high:   { bg: 'rgba(231,76,60,0.15)',   color: '#e74c3c' },
+        medium: { bg: 'rgba(243,156,18,0.15)',   color: '#f39c12' },
+        low:    { bg: 'rgba(39,174,96,0.15)',    color: '#27ae60' },
+    };
+
+    function setStatus(msg, color) {
+        statusEl.innerHTML = msg;
+        statusEl.style.color = color || 'var(--text-secondary)';
+        statusEl.style.display = msg ? 'block' : 'none';
+    }
+
+    if (classifyBtn) {
+        classifyBtn.addEventListener('click', async function () {
+            const issue = issueInput ? issueInput.value.trim() : '';
+            const desc  = descInput  ? descInput.value.trim()  : '';
+
+            if (!issue && !desc) {
+                setStatus('<i class="fa-solid fa-triangle-exclamation" style="margin-right:5px;"></i>Fill in the issue and description first.', '#e67e22');
+                return;
+            }
+
+            // Loading
+            classifyBtn.disabled = true;
+            classifyBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin" style="margin-right:5px;"></i>Classifying...';
+            resultBox.style.display = 'none';
+            setStatus('');
+
+            try {
+                const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+                const response = await fetch('{% url "ai_classify_maintenance" %}', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrfToken,
+                    },
+                    body: JSON.stringify({ issue, description: desc }),
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    setStatus('<i class="fa-solid fa-circle-xmark" style="margin-right:5px;"></i>' + (data.error || 'Something went wrong.'), '#e74c3c');
+                    return;
+                }
+
+                lastSuggestion = data;
+
+                // Render result
+                const cat = data.category || 'other';
+                const pri = data.priority || 'low';
+                const colors = priorityColors[pri] || priorityColors.low;
+
+                aiCatEl.textContent = cat.charAt(0).toUpperCase() + cat.slice(1);
+                aiPriEl.textContent = pri.charAt(0).toUpperCase() + pri.slice(1);
+                aiPriEl.style.background = colors.bg;
+                aiPriEl.style.color      = colors.color;
+                aiReasonEl.textContent   = data.reason || '';
+                resultBox.style.display  = 'block';
+
+            } catch (err) {
+                setStatus('<i class="fa-solid fa-circle-xmark" style="margin-right:5px;"></i>Network error. Please try again.', '#e74c3c');
+            } finally {
+                classifyBtn.disabled = false;
+                classifyBtn.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles" style="margin-right:5px;"></i>Suggest';
+            }
+        });
+    }
+
+    if (applyBtn) {
+        applyBtn.addEventListener('click', function () {
+            if (!lastSuggestion) return;
+
+            // Set category dropdown
+            if (catSelect) {
+                for (let opt of catSelect.options) {
+                    if (opt.value === lastSuggestion.category) {
+                        opt.selected = true;
+                        break;
+                    }
+                }
+            }
+            // Set priority dropdown
+            if (priSelect) {
+                for (let opt of priSelect.options) {
+                    if (opt.value === lastSuggestion.priority) {
+                        opt.selected = true;
+                        break;
+                    }
+                }
+            }
+
+            // Visual feedback on button
+            applyBtn.innerHTML = '<i class="fa-solid fa-check" style="margin-right:4px;"></i>Applied!';
+            applyBtn.style.background = '#27ae60';
+            setTimeout(() => {
+                applyBtn.innerHTML = '<i class="fa-solid fa-check" style="margin-right:4px;"></i>Apply';
+                applyBtn.style.background = '';
+            }, 2000);
+        });
+    }
+})();
+</script>
 {% endblock %}

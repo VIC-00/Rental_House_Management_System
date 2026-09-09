@@ -1,0 +1,55 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="page-content active">
+
+    <div style="max-width: 800px; margin: 0 auto;">
+
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px;">
+            <div>
+                <h1 style="margin: 0; font-size: 1.5rem; font-weight: 800; color: var(--text-primary);">
+                    <i class="fa-solid fa-bullhorn" style="color: #3498db; margin-right: 10px;"></i>
+                    All Announcements
+                </h1>
+                <p style="margin: 5px 0 0; color: var(--text-secondary); font-size: 0.85rem;">
+                    All notices from management for your property
+                </p>
+            </div>
+            <a href="{% url 'tenant_dashboard' %}" class="btn btn-secondary" style="text-decoration: none;">
+                <i class="fa-solid fa-arrow-left" style="margin-right: 6px;"></i> Back to Dashboard
+            </a>
+        </div>
+
+        {% if all_notes %}
+            {% for note in all_notes %}
+            <div style="margin-bottom: 18px; padding: 22px 24px; background: var(--bg-secondary); border-radius: 12px; border: 1px solid var(--border-color); border-left: 5px solid #3498db; box-shadow: 0 2px 8px rgba(0,0,0,0.06);">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px;">
+                    <h3 style="margin: 0; color: var(--text-primary); font-weight: 700; font-size: 1rem;">
+                        {{ note.title }}
+                    </h3>
+                    <span style="font-size: 0.72rem; font-weight: 600; color: #95a5a6; white-space: nowrap; margin-left: 15px;">
+                        {{ note.date_posted|date:"M d, Y" }}
+                    </span>
+                </div>
+                <p style="margin: 0; color: var(--text-secondary); line-height: 1.7; font-size: 0.9rem;">
+                    {{ note.content }}
+                </p>
+                {% if note.is_broadcast %}
+                <div style="margin-top: 12px;">
+                    <span style="font-size: 0.7rem; font-weight: 700; background: rgba(52,152,219,0.1); color: #3498db; padding: 3px 10px; border-radius: 20px; text-transform: uppercase; letter-spacing: 0.5px;">
+                        All Residents
+                    </span>
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        {% else %}
+            <div style="text-align: center; padding: 60px 30px; background: var(--bg-secondary); border-radius: 12px; border: 1px solid var(--border-color);">
+                <i class="fa-solid fa-bullhorn" style="font-size: 2.5rem; color: var(--text-secondary); opacity: 0.4; margin-bottom: 15px; display: block;"></i>
+                <p style="color: var(--text-secondary); font-style: italic; margin: 0;">No announcements from management yet.</p>
+            </div>
+        {% endif %}
+
+    </div>
+</div>
+{% endblock %}

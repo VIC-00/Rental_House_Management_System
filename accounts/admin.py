@@ -1,6 +1,15 @@
-from django.contrib import admin
+from django.contrib import admin, messages as admin_messages
 from django.contrib.auth.admin import UserAdmin
-from .models import CustomUser, Property, Tenant, Payment, MaintenanceRequest, Announcement
+from .models import CustomUser, Property, Tenant, Payment, MaintenanceRequest, Announcement, SentMessage, RentCharge
+
+
+def approve_landlords(modeladmin, request, queryset):
+    """Bulk action: approve selected landlord accounts."""
+    landlords = queryset.filter(role='landlord', is_approved=False)
+    count = landlords.update(is_approved=True)
+    admin_messages.success(request, f"{count} landlord account(s) approved successfully.")
+
+approve_landlords.short_description = "Approve selected landlord accounts"
 
 # ==============================================================================
 # --- 1. USER MANAGEMENT ---
@@ -9,19 +18,21 @@ from .models import CustomUser, Property, Tenant, Payment, MaintenanceRequest, A
 @admin.register(CustomUser)
 class CustomUserAdmin(UserAdmin):
     model = CustomUser
+    actions = [approve_landlords]
     
-    # Adds 'role', 'phone_number', and 'specialization' to the edit screen
+    # Adds custom fields to the edit screen — split into logical sections
     fieldsets = UserAdmin.fieldsets + (
         ('Property Management Info', {'fields': ('role', 'phone_number', 'specialization')}),
+        ('Access & Account Flags', {'fields': ('employer', 'must_change_password', 'is_approved')}),
     )
     
     # Ensures these show up on the "Add User" screen
     add_fieldsets = UserAdmin.add_fieldsets + (
-        (None, {'fields': ('role', 'phone_number', 'specialization')}),
+        (None, {'fields': ('role', 'phone_number', 'specialization', 'employer', 'must_change_password', 'is_approved')}),
     )
     
-    list_display = ['username', 'email', 'role', 'specialization', 'is_staff', 'is_active']
-    list_filter = ['role', 'is_staff', 'is_active']
+    list_display = ['username', 'email', 'role', 'is_approved', 'specialization', 'employer', 'must_change_password', 'is_staff', 'is_active']
+    list_filter = ['role', 'is_approved', 'must_change_password', 'is_staff', 'is_active']
     search_fields = ['username', 'email', 'phone_number']
 
 
@@ -74,3 +85,24 @@ class MaintenanceAdmin(admin.ModelAdmin):
 class AnnouncementAdmin(admin.ModelAdmin):
     list_display = ('title', 'date_posted', 'is_active')
     list_filter = ('is_active',)
+
+
+# ==============================================================================
+# --- 4. COMMUNICATIONS & BILLING AUDIT ---
+# ==============================================================================
+
+@admin.register(SentMessage)
+class SentMessageAdmin(admin.ModelAdmin):
+    list_display = ('subject', 'sender', 'sent_at', 'recipient_count', 'delivery_method')
+    list_filter = ('delivery_method', 'sent_at')
+    search_fields = ('subject', 'sender__username', 'sender__first_name')
+    ordering = ('-sent_at',)
+    readonly_fields = ('sent_at',)
+
+@admin.register(RentCharge)
+class RentChargeAdmin(admin.ModelAdmin):
+    list_display = ('tenant', 'amount', 'month', 'year', 'created_at')
+    list_filter = ('year', 'month')
+    search_fields = ('tenant__user__username', 'tenant__user__first_name', 'tenant__user__last_name')
+    ordering = ('-year', '-month')
+    readonly_fields = ('created_at',)

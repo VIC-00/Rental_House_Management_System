@@ -10,10 +10,13 @@
   Custom dashboards tailored for **Landlords** (analytics & oversight), **Tenants** (payments & issues), and **Maintenance Staff** (task tracking).
 
 - **Smart Authentication**  
-  Dual-identifier login (Username or Email) with a built-in **Security Guard** that forces tenants to update temporary passwords upon first login.
+  Dual-identifier login (Username or Email) with a built-in **Security Guard** that forces tenants to update temporary passwords upon first login. Logout is CSRF-protected (POST-only).
 
 - **Financial Integrity**  
-  An automated balance engine that recalculates tenant debt instantly whenever payments are confirmed, edited, or deleted.
+  An automated balance engine that recalculates tenant debt instantly whenever payments are confirmed, edited, or deleted. Monthly rent charges are generated via a management command.
+
+- **AI-Powered Features**  
+  Powered by the Google Gemini API: AI-drafted announcements, automatic maintenance request classification (category + priority), a tenant virtual assistant chatbot, and daily landlord dashboard briefings.
 
 - **Interactive Analytics**  
   Real-time data visualization using **Chart.js** to track revenue trends and maintenance distribution.
@@ -21,14 +24,19 @@
 - **One-Click Compliance**  
   Exportable **CSV reports** for revenue summaries, tenant arrears, and maintenance history.
 
+- **Mass Communications**  
+  Broadcast messages to all tenants, tenants in arrears, or a specific tenant via Email and/or SMS channels, with a full delivery log.
+
 ---
 
 ## 🛠️ Tech Stack
 
 - **Backend:** Python 3.10+ / Django 6.0  
 - **Database:** SQLite (Development) / PostgreSQL (Production-ready)  
-- **UI/UX:** HTML5, Vanilla JavaScript, CSS3 (custom variables), Bootstrap 5 via Crispy Forms  
+- **UI/UX:** HTML5, Vanilla JavaScript, CSS3 (custom CSS variables + dark mode)  
 - **Charts:** Chart.js  
+- **AI:** Google Gemini API (`google-genai` SDK)  
+- **Icons:** Font Awesome 6  
 
 ---
 
@@ -65,26 +73,40 @@ Ensure the following are installed:
 
     pip install -r requirements.txt
 
+### 4. Configure Environment Variables
+
+Create a `.env` file in the project root (same folder as `manage.py`):
+
+    touch .env
+
+Add the following to `.env`:
+
+    SECRET_KEY=your-very-long-random-secret-key-here
+    GEMINI_API_KEY=your-google-gemini-api-key-here
+
+> **Generating a SECRET_KEY:** Run `python3 -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"` and paste the output.  
+> **Gemini API Key:** Get one free at [https://aistudio.google.com/app/apikey](https://aistudio.google.com/app/apikey). AI features will fail if this key is not set.
+
 ---
 
 ## 🗄️ Step 3: Database & Superuser Initialization
 
 > **Important:** RHMS uses a **Custom User Model**. The order below is critical.
 
-### 1. Generate & Apply Migrations
+### 1. Apply Migrations
 
-    python manage.py makemigrations accounts
-    python manage.py migrate
+    python3 manage.py makemigrations accounts
+    python3 manage.py migrate
 
 ### 2. Create the Master Admin (Landlord)
 
-    python manage.py createsuperuser
+    python3 manage.py createsuperuser
 
 Follow the prompts to set your username, email, and password.
 
 ### 3. Assign the Landlord Role
 
-    python manage.py runserver
+    python3 manage.py runserver
 
 Open your browser and go to:
 
@@ -101,14 +123,11 @@ Open your browser and go to:
 
 ### Password Strength
 
-Enable strong password validation in `renthouse/settings.py`:
+Password validators are currently **disabled** in `renthouse/settings.py` for development convenience. Before going to production, uncomment the `AUTH_PASSWORD_VALIDATORS` block in `settings.py` to enforce minimum length, common password checks, and numeric-only password rejection.
 
-    AUTH_PASSWORD_VALIDATORS = [
-        { 'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator', },
-        { 'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator', },
-        { 'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator', },
-        { 'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator', },
-    ]
+### Environment Variables
+
+Ensure your `.env` file is never committed to version control. It is already listed in `.gitignore`.
 
 ---
 
@@ -123,17 +142,23 @@ Enable strong password validation in `renthouse/settings.py`:
 - Add properties, units, and rent targets  
 - Approve or manually onboard tenants  
 - Confirm tenant payments to auto-update balances  
+- Broadcast mass messages via Email/SMS  
+- Post announcements to all tenants or a specific property  
+- Use AI tools: draft announcements, classify maintenance, get dashboard insights  
 
 ### 🏠 For Tenants (Resident)
 
 - Self-register and wait for landlord approval  
-- Change password on first login  
-- Report maintenance issues  
+- Change password on first login (enforced automatically)  
+- Report maintenance issues (AI auto-classifies category and priority)  
 - Submit formal move-out notices  
+- Chat with the AI tenant assistant  
+- View all announcements from management  
 
 ### 🛠️ For Maintenance Staff (Technician)
 
 - Register and select a **Target Landlord**  
+- Wait for landlord approval before dashboard access  
 - View assigned tasks  
 - Update task status: Assigned → In Progress → Completed  
 
@@ -144,42 +169,69 @@ Enable strong password validation in `renthouse/settings.py`:
 RHMS includes custom Django management commands to automate routine actions like billing and lease lifecycle management. These can be run manually or set up via cron jobs/task schedulers in production.
 
 ### 1. Generate Monthly Rent
-Generates monthly rent charges for all active tenants. It automatically calculates and bills **pro-rated rent** for a tenant's first month based on their move-in date, and full rent amount thereafter. It includes safety checks to prevent double-billing for the same calendar month.
 
-    python manage.py generate_rent
+Generates monthly rent charges for all active tenants whose move-in date is today or in the past. Includes a safety lock to prevent double-billing for the same calendar month.
+
+    python3 manage.py generate_rent
 
 ### 2. Check Lease Expirations
-Scans the database and shifts active/notified tenants to `'expired'` status if their lease end date is in the past, updating their final balance ledger.
 
-    python manage.py check_expired_leases
+Scans the database and shifts active/notice-given tenants to `'expired'` status if their lease end date is in the past, then seals their final balance.
+
+    python3 manage.py check_expired_leases
 
 ---
 
 ## 🧪 Step 7: Running Unit Tests
 
-To run the verification test suite covering payment validations, pro-rata logic, and announcement broadcasting:
+To run the verification test suite:
 
-    python manage.py test
+    python3 manage.py test
 
 ---
 
 ## ✉️ Step 8: Email & Notifications
+
 During development, RHMS is configured to print emails (e.g., password reset requests, mass notifications) directly to the console:
 
 - **Mail Backend**: `django.core.mail.backends.console.EmailBackend` (configured in `renthouse/settings.py`).
 - Inspect your running server terminal output to view any sent email content.
 
+For production, replace the mail backend with SMTP settings and add the credentials to your `.env` file.
+
+---
+
+## 🚢 Step 9: Production Checklist
+
+Before deploying to production:
+
+- [ ] Set `DEBUG = False` in `settings.py`
+- [ ] Set a strong `SECRET_KEY` in `.env`
+- [ ] Configure a real SMTP email backend
+- [ ] Run `python3 manage.py collectstatic` (static files go to `staticfiles/`)
+- [ ] Switch to PostgreSQL (update `DATABASES` in `settings.py`)
+- [ ] Uncomment `AUTH_PASSWORD_VALIDATORS` in `settings.py`
+- [ ] Set `ALLOWED_HOSTS` to your domain
+
 ---
 
 ## 📁 Project Structure
 
-    renthouse/      # Core project configuration
-    accounts/       # Core application logic
-     ├── models.py  # Users, properties, tenants, payments
-     ├── views.py   # Business logic and role handling
-     ├── forms.py   # Styled Django ModelForms
-    templates/      # HTML templates
-    static/         # styles.css and main.js
+    renthouse/                          # Core project configuration
+    accounts/                           # Core application logic
+     ├── models.py                      # Users, properties, tenants, payments, announcements
+     ├── views.py                       # Business logic and role-based routing
+     ├── forms.py                       # Django ModelForms
+     ├── admin.py                       # Django admin registrations
+     ├── middleware.py                  # Password-change enforcement middleware
+     ├── context_processors.py          # Global template context (tenant list, badge counts)
+     ├── ai_utils.py                    # Google Gemini AI integration
+     └── management/commands/           # Custom management commands
+          ├── generate_rent.py          # Monthly billing engine
+          └── check_expired_leases.py   # Lease expiry processor
+    templates/                          # HTML templates
+    static/                             # styles.css and main.js
+    staticfiles/                        # Generated by collectstatic (gitignored)
 
 ---
 

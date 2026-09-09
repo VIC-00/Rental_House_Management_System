@@ -22,7 +22,7 @@ class Command(BaseCommand):
         for tenant in expired_tenants:
             old_status = tenant.status
             tenant.status = 'expired'
-            tenant.save()
+            tenant.save(update_fields=['status'])  # Only UPDATE status — skips full save() override
             
             # Recalculate their ledger one final time to seal their final balance
             tenant.update_balance()

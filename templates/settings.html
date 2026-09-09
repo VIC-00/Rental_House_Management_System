@@ -98,59 +98,17 @@
 </div>
 
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    const themeToggle = document.getElementById('themeToggle');
-    const html = document.documentElement;
-
-    // 1. SYNC: Set toggle position based on current state of the <html> tag
-    const isDark = html.getAttribute('data-theme') === 'dark';
-    themeToggle.checked = !isDark; 
-
-    // 2. LOGIC: Flip the switch
-    themeToggle.addEventListener('change', function() {
-        if (this.checked) {
-            // Checked means LIGHT MODE
-            html.removeAttribute('data-theme');
-            localStorage.setItem('theme', 'light');
-            updateHeaderUI('light');
-        } else {
-            // Unchecked means DARK MODE
-            html.setAttribute('data-theme', 'dark');
-            localStorage.setItem('theme', 'dark');
-            updateHeaderUI('dark');
-        }
-    });
-
-    // 3. UI HELPER: Sync the Top Bar button text and Font Awesome Icon
-    function updateHeaderUI(theme) {
-        const headerBtnText = document.getElementById('darkModeText');
-        const headerBtnIcon = document.getElementById('darkModeIcon');
-        
-        if (headerBtnText && headerBtnIcon) {
-            if (theme === 'light') {
-                headerBtnText.textContent = 'Dark Mode';
-                headerBtnIcon.innerHTML = '<i class="fa-solid fa-moon"></i>';
-            } else {
-                headerBtnText.textContent = 'Light Mode';
-                headerBtnIcon.innerHTML = '<i class="fa-solid fa-sun" style="color: #f1c40f;"></i>';
-            }
-        }
-    }
-});
-
-// Updated password toggle logic for Font Awesome
+// Password visibility toggle for Font Awesome icons
 function togglePassword(inputId, spanElement) {
     const input = document.getElementById(inputId);
-    const icon = spanElement.querySelector('i'); // Target the <i> tag inside the span
+    const icon = spanElement.querySelector('i');
     
     if (input.type === "password") {
         input.type = "text";
-        // Swap to eye-slash
         icon.classList.remove('fa-eye');
         icon.classList.add('fa-eye-slash');
     } else {
         input.type = "password";
-        // Swap back to eye
         icon.classList.remove('fa-eye-slash');
         icon.classList.add('fa-eye');
     }

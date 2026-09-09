@@ -108,7 +108,7 @@
                                 {% if payment.status == 'pending' %}
                                     <form action="{% url 'approve_payment' payment.pk %}" method="POST" style="display: inline;">
                                         {% csrf_token %}
-                                        <button type="submit" class="btn btn-primary btn-small" style="background: #27ae60; border: none;" onclick="return confirm('Confirm receipt of KES {{ payment.amount }}?')">
+                                        <button type="submit" class="btn btn-primary btn-small" style="background: #27ae60; border: none;">
                                             Confirm
                                         </button>
                                     </form>
@@ -116,7 +116,7 @@
                                     <a href="{% url 'generate_invoice' payment.pk %}" class="btn btn-secondary btn-small">Invoice</a>
                                     <a href="{% url 'edit_payment' payment.pk %}" class="btn btn-primary btn-small">Edit</a>
                                 {% endif %}
-                                <a href="{% url 'delete_payment' payment.pk %}" class="btn btn-danger btn-small" style="background: #e74c3c; border: none;" onclick="return confirm('Delete this payment record?')">Delete</a>
+                                <a href="{% url 'delete_payment' payment.pk %}" class="btn btn-danger btn-small" style="background: #e74c3c; border: none;">Delete</a>
                             </div>
                         </td>
                     </tr>

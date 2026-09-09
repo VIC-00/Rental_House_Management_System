@@ -40,6 +40,24 @@
         </div>
     </div>
 
+    {# --- AI Daily Briefing Card --- #}
+    <div id="insightsCard" style="margin-bottom: 25px; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 10px; padding: 16px 20px; display: flex; align-items: flex-start; gap: 14px;">
+        <div style="flex-shrink: 0; width: 38px; height: 38px; border-radius: 9px; background: linear-gradient(135deg, #5d9cec, #4a89dc); display: flex; align-items: center; justify-content: center;">
+            <i class="fa-solid fa-wand-magic-sparkles" style="color: white; font-size: 15px;"></i>
+        </div>
+        <div style="flex: 1; min-width: 0;">
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 6px;">
+                <span style="font-weight: 700; font-size: 13px; color: var(--text-primary);">Daily Briefing</span>
+                <button id="insightsRefreshBtn" title="Refresh briefing" style="background: none; border: none; cursor: pointer; color: var(--text-secondary); font-size: 13px; padding: 0; transition: color 0.2s;">
+                    <i class="fa-solid fa-rotate-right"></i>
+                </button>
+            </div>
+            <p id="insightsText" style="margin: 0; font-size: 13.5px; color: var(--text-secondary); line-height: 1.65;">
+                <i class="fa-solid fa-spinner fa-spin" style="margin-right: 6px;"></i>Loading your briefing...
+            </p>
+        </div>
+    </div>
+
     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 20px; margin-bottom: 25px;">
         <div class="card" style="margin-bottom: 0;">
             <div class="card-header">
@@ -139,9 +157,36 @@
     <div class="modal-content" style="max-width: 750px; width: 90%; background-color: var(--bg-primary); margin: 5% auto; border: 1px solid var(--border-color); border-radius: 10px; box-shadow: 0 10px 40px rgba(0,0,0,0.3); overflow: hidden;"> 
         <div class="modal-header" style="padding: 20px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center;">
             <h2 style="margin: 0; color: var(--text-primary);">Broadcast New Announcement</h2>
-            <button type="button" class="close-btn" id="closeAnnounce" style="background: none; border: none; font-size: 24px; color: var(--text-secondary); cursor: pointer;">&times;</button>
+            <button type="button" class="close-btn" id="closeAnnounce" style="background: none; border: none; font-size: 18px; color: var(--text-secondary); cursor: pointer;">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
         </div>
-        
+
+        {# --- AI DRAFTER PANEL --- #}
+        <div id="aiDrafterPanel" style="margin: 16px 20px 0; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; padding: 14px 16px;">
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
+                <i class="fa-solid fa-wand-magic-sparkles" style="color: var(--text-secondary); font-size: 13px;"></i>
+                <span style="font-weight: 600; color: var(--text-primary); font-size: 13.5px;">Draft with AI</span>
+            </div>
+            <div style="display: flex; gap: 8px; align-items: flex-start;">
+                <input
+                    id="aiTopicInput"
+                    type="text"
+                    placeholder='e.g. "water outage Saturday" or "rent reminder for July"'
+                    style="flex: 1; padding: 9px 12px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--input-bg); color: var(--text-primary); font-size: 13.5px;"
+                />
+                <button
+                    id="aiDraftBtn"
+                    type="button"
+                    class="btn btn-primary"
+                    style="white-space: nowrap;"
+                >
+                    <i class="fa-solid fa-wand-magic-sparkles" style="margin-right: 5px;"></i>Draft
+                </button>
+            </div>
+            <div id="aiDraftStatus" style="margin-top: 8px; font-size: 12.5px; display: none;"></div>
+        </div>
+
         <form method="POST">
             {% csrf_token %}
             <div class="modal-body" style="padding: 20px;">
@@ -171,6 +216,7 @@
         </form>
     </div>
 </div>
+
 
 {{ prop_names|json_script:"prop-names-data" }}
 {{ prop_revenues|json_script:"prop-revenues-data" }}
@@ -243,8 +289,159 @@
     if (closeAnnounce) closeAnnounce.onclick = closeFunc;
     if (cancelAnnounce) cancelAnnounce.onclick = closeFunc;
 
-    window.onclick = function(event) {
+    window.addEventListener('click', function(event) {
         if (event.target == announceModal) announceModal.style.display = "none";
+    });
+
+    // --- AI Announcement Drafter ---
+    const aiDraftBtn   = document.getElementById('aiDraftBtn');
+    const aiTopicInput = document.getElementById('aiTopicInput');
+    const aiStatus     = document.getElementById('aiDraftStatus');
+
+    // Get the form fields rendered by Django's form
+    const titleInput   = document.getElementById('id_title');
+    const contentInput = document.getElementById('id_content');
+
+    function setAiStatus(msg, color) {
+        aiStatus.innerHTML = msg;
+        aiStatus.style.color = color || 'var(--text-secondary)';
+        aiStatus.style.display = msg ? 'block' : 'none';
     }
+
+    if (aiDraftBtn) {
+        aiDraftBtn.addEventListener('click', async function () {
+            const topic = aiTopicInput.value.trim();
+            if (!topic) {
+                setAiStatus('<i class="fa-solid fa-triangle-exclamation" style="margin-right:5px;"></i>Please type a topic first.', '#e67e22');
+                aiTopicInput.focus();
+                return;
+            }
+
+            // Loading state
+            aiDraftBtn.disabled = true;
+            aiDraftBtn.style.opacity = '0.6';
+            aiDraftBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin" style="margin-right:5px;"></i>Drafting...';
+            setAiStatus('<i class="fa-solid fa-spinner fa-spin" style="margin-right:5px;"></i>Drafting your announcement...', 'var(--text-secondary)');
+
+            try {
+                const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+                const response = await fetch('{% url "ai_draft_announcement" %}', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrfToken,
+                    },
+                    body: JSON.stringify({ topic }),
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    setAiStatus('<i class="fa-solid fa-circle-xmark" style="margin-right:5px;"></i>' + (data.error || 'Something went wrong.'), '#e74c3c');
+                    return;
+                }
+
+                // Auto-fill the form
+                if (titleInput)   titleInput.value   = data.title   || '';
+                if (contentInput) contentInput.value = data.content || '';
+
+                setAiStatus('<i class="fa-solid fa-circle-check" style="margin-right:5px;"></i>Draft ready! Review it below and edit if needed.', '#27ae60');
+
+            } catch (err) {
+                setAiStatus('<i class="fa-solid fa-circle-xmark" style="margin-right:5px;"></i>Network error. Please try again.', '#e74c3c');
+            } finally {
+                aiDraftBtn.disabled = false;
+                aiDraftBtn.style.opacity = '1';
+                aiDraftBtn.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles" style="margin-right:5px;"></i>Draft';
+            }
+        });
+
+        // Clear status when user edits the topic input
+        aiTopicInput.addEventListener('input', function() {
+            setAiStatus('', '');
+        });
+    }
+
+    // --- AI Daily Briefing ---
+    const insightsText       = document.getElementById('insightsText');
+    const insightsRefreshBtn = document.getElementById('insightsRefreshBtn');
+
+    async function loadInsights(forceRefresh = false) {
+        insightsText.innerHTML = '<i class="fa-solid fa-spinner fa-spin" style="margin-right:6px;"></i>Loading your briefing...';
+        insightsText.style.color = 'var(--text-secondary)';
+        if (insightsRefreshBtn) {
+            insightsRefreshBtn.style.pointerEvents = 'none';
+            insightsRefreshBtn.style.opacity = '0.4';
+        }
+
+        const url = forceRefresh
+            ? '{% url "ai_dashboard_insights" %}?refresh=1'
+            : '{% url "ai_dashboard_insights" %}';
+
+        try {
+            const res = await fetch(url, {
+                method: 'GET',
+                headers: { 'X-CSRFToken': '{{ csrf_token }}' },
+            });
+            const data = await res.json();
+
+            if (!res.ok || data.error) {
+                insightsText.textContent = data.error || 'Could not load briefing.';
+                insightsText.style.color = '#e74c3c';
+            } else {
+                insightsText.textContent = data.insight || 'No briefing available.';
+                insightsText.style.color = 'var(--text-primary)';
+
+                // Show a subtle cached indicator
+                const label = document.querySelector('#insightsCard span[style*="font-weight: 700"]');
+                if (label) {
+                    label.innerHTML = data.cached
+                        ? 'Daily Briefing <span style="font-weight:400; font-size:11px; color:var(--text-secondary);">(cached)</span>'
+                        : 'Daily Briefing';
+                }
+            }
+        } catch (err) {
+            insightsText.textContent = 'Network error — briefing unavailable.';
+            insightsText.style.color = '#e74c3c';
+        } finally {
+            if (insightsRefreshBtn) {
+                insightsRefreshBtn.style.pointerEvents = '';
+                insightsRefreshBtn.style.opacity = '1';
+            }
+        }
+    }
+
+    // Auto-load on page open (serves from cache if available)
+    loadInsights(false);
+
+    // Manual refresh — 60-second cooldown to conserve API quota
+    if (insightsRefreshBtn) {
+        let refreshCooldown = null;
+
+        insightsRefreshBtn.addEventListener('click', () => {
+            if (refreshCooldown) return; // blocked during cooldown
+
+            loadInsights(true);
+
+            // Start 60-second cooldown
+            let secondsLeft = 60;
+            insightsRefreshBtn.disabled = true;
+            insightsRefreshBtn.style.opacity = '0.4';
+            insightsRefreshBtn.title = `Refresh available in ${secondsLeft}s`;
+
+            refreshCooldown = setInterval(() => {
+                secondsLeft--;
+                insightsRefreshBtn.title = `Refresh available in ${secondsLeft}s`;
+                if (secondsLeft <= 0) {
+                    clearInterval(refreshCooldown);
+                    refreshCooldown = null;
+                    insightsRefreshBtn.disabled = false;
+                    insightsRefreshBtn.style.opacity = '1';
+                    insightsRefreshBtn.title = 'Refresh briefing';
+                }
+            }, 1000);
+        });
+    }
+
 </script>
 {% endblock %}
