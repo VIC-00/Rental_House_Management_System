@@ -275,11 +275,12 @@ Here is today's portfolio data:
 - Pending maintenance requests: {data.get('pending_maintenance', 0)}
 - Maintenance requests in progress: {data.get('in_progress_maintenance', 0)}
 - Requests pending for more than 7 days: {data.get('stale_maintenance', 0)}
-- Move-out notices given: {data.get('move_out_notices', 0)}
+- Pending move-out notices (awaiting review): {data.get('move_out_notices', 0)}
+- Approved upcoming move-outs: {data.get('approved_move_outs', 0)}
 - Today's date: {data.get('today', 'unknown')}
 
 Write a professional, concise daily briefing in 2-4 sentences.
-- Lead with the most urgent item (overdue payments, stale maintenance, or move-out notices if any).
+- Lead with the most urgent item (overdue payments, stale maintenance, or move-out notices / upcoming move-outs if any).
 - Be factual, direct, and use KES for currency.
 - If everything looks good, say so briefly and positively.
 - Do NOT use bullet points. Write in flowing prose only.

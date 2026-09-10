@@ -8,7 +8,7 @@ from django.contrib import messages
 from django.contrib.auth.hashers import check_password
 from django.contrib.auth.forms import PasswordChangeForm
 from django.db.models import Sum, Count, Q, Avg, F, ProtectedError
-from .models import Property, Tenant, Payment, MaintenanceRequest, CustomUser, SentMessage, Announcement
+from .models import Property, Tenant, Payment, MaintenanceRequest, CustomUser, SentMessage, Announcement, RentCharge
 from .forms import PropertyForm, AddTenantFullForm, UserSignupForm, PaymentForm, MaintenanceForm, TenantMaintenanceRequestForm, AnnouncementForm, MoveOutRequestForm, UserUpdateForm,TenantPaymentForm, MaintenanceTaskUpdateForm, MaintenanceAssignmentForm, AddStaffForm
 from django.urls import reverse
 from django.http import HttpResponse, JsonResponse
@@ -315,7 +315,7 @@ def properties_view(request):
         properties = my_properties
 
     total_units = properties.aggregate(Sum('total_units'))['total_units__sum'] or 0
-    occupied = Tenant.objects.filter(assigned_property__in=properties).count()
+    occupied = Tenant.objects.filter(assigned_property__in=properties).exclude(status__in=['expired', 'moved_out', 'pending']).count()
     total_revenue = properties.aggregate(Sum('monthly_revenue'))['monthly_revenue__sum'] or 0
     
     context = {
@@ -360,6 +360,11 @@ def tenants_view(request):
     
     # Move-out notices don't care about balance
     move_out_notices = tenants.filter(status='notice_given').count()
+    approved_move_outs = tenants.filter(status='approved').count()
+    
+    # Active and expired tenant counts
+    active_count = tenants.filter(status='active').count()
+    expired_count = tenants.filter(status='expired').count()
     
     # THE FIX: Good Standing now includes balances of 0 AND negative (Credits)
     standing_count = tenants.filter(balance__lte=0, status='active').count()
@@ -371,9 +376,12 @@ def tenants_view(request):
         'tenants': tenants,
         'pending_tenants': pending_tenants,
         'properties': Property.objects.filter(landlord=request.user),
+        'active_count': active_count,
+        'expired_count': expired_count,
         'standing_count': standing_count,
         'overdue_count': overdue_count,
         'move_out_notices': move_out_notices,
+        'approved_move_outs': approved_move_outs,
         'query': search_query,
         'selected_property': property_filter,
     }
@@ -412,11 +420,25 @@ def payments_view(request):
         except ValueError:
             pass  # Ignore invalid/non-integer values silently
 
-    # --- FINANCIAL CALCULATIONS (Keep as is) ---
-    expected = Property.objects.filter(landlord=request.user).aggregate(Sum('monthly_revenue'))['monthly_revenue__sum'] or 0
-    total_confirmed = payments.filter(status='confirmed').aggregate(Sum('amount'))['amount__sum'] or 0
-    total_pending = payments.filter(status='pending').aggregate(Sum('amount'))['amount__sum'] or 0
-    
+    # --- FINANCIAL CALCULATIONS ---
+    # Expected total = sum of RentCharges issued THIS month (what was actually billed),
+    # not the full portfolio capacity. Gives a meaningful collection rate.
+    now = timezone.now()
+    expected = RentCharge.objects.filter(
+        tenant__assigned_property__landlord=request.user,
+        month=now.month,
+        year=now.year
+    ).aggregate(Sum('amount'))['amount__sum'] or 0
+
+    # total_confirmed / total_pending use the UNFILTERED payment set for the stat cards
+    all_payments = Payment.objects.filter(tenant__assigned_property__landlord=request.user)
+    total_confirmed = all_payments.filter(
+        status='confirmed', date__year=now.year, date__month=now.month
+    ).aggregate(Sum('amount'))['amount__sum'] or 0
+    total_pending = all_payments.filter(
+        status='pending', date__year=now.year, date__month=now.month
+    ).aggregate(Sum('amount'))['amount__sum'] or 0
+
     rate = (total_confirmed / expected * 100) if expected > 0 else 0
 
     context = {
@@ -440,10 +462,30 @@ def maintenance_view(request):
 
     status_filter = request.GET.get('status', 'all')
     
-    # 1. Fetch Maintenance Tasks (Filtered by properties owned by THIS landlord)
-    requests = MaintenanceRequest.objects.filter(
+    # 1. Base Queryset (Filtered by properties owned by THIS landlord)
+    base_requests = MaintenanceRequest.objects.filter(
         tenant__assigned_property__landlord=request.user
-    ).select_related(
+    )
+
+    # 2. Stats Calculations (Unfiltered - true portfolio overview)
+    open_count = base_requests.filter(status='pending').count()
+    progress_count = base_requests.filter(status='in_progress').count()
+    completed_count = base_requests.filter(status='completed').count()
+
+    # 3. Calculate Average Resolution Time
+    resolved_tasks = base_requests.filter(status='completed', date_resolved__isnull=False)
+    avg_timedelta = resolved_tasks.aggregate(
+        avg_time=Avg(F('date_resolved') - F('date_reported'))
+    )['avg_time']
+    
+    if avg_timedelta:
+        days = avg_timedelta.days
+        avg_display = f"{days} Days" if days > 0 else "Under 24h"
+    else:
+        avg_display = "---"
+
+    # 4. Fetch Maintenance Tasks for the Table
+    requests = base_requests.select_related(
         'tenant__user', 
         'tenant__assigned_property', 
         'assigned_to'
@@ -458,25 +500,8 @@ def maintenance_view(request):
     pending_staff_count = CustomUser.objects.filter(
         role='maintenance', 
         is_active=False,
-        employer=request.user  #  This prevents the "leak" to other landlords
+        employer=request.user  # This prevents the "leak" to other landlords
     ).count()
-
-    # 2. Stats Calculations (Filtered to this landlord's tasks)
-    open_count = requests.filter(status='pending').count()
-    progress_count = requests.filter(status='in_progress').count()
-    completed_count = requests.filter(status='completed').count()
-
-    # 3. Calculate Average Resolution Time
-    resolved_tasks = requests.filter(status='completed', date_resolved__isnull=False)
-    avg_timedelta = resolved_tasks.aggregate(
-        avg_time=Avg(F('date_resolved') - F('date_reported'))
-    )['avg_time']
-    
-    if avg_timedelta:
-        days = avg_timedelta.days
-        avg_display = f"{days} Days" if days > 0 else "Under 24h"
-    else:
-        avg_display = "---"
 
     context = {
         'maintenance_requests': requests,
@@ -525,6 +550,20 @@ def reports_view(request):
         actual_collected=Subquery(period_payments)
     )
 
+    # Collect all (year, month) pairs in the date range for Target (Invoicing)
+    cur = start_date.replace(day=1)
+    period_months = set()
+    while cur <= end_date:
+        period_months.add((cur.year, cur.month))
+        if cur.month == 12:
+            cur = cur.replace(year=cur.year + 1, month=1)
+        else:
+            cur = cur.replace(month=cur.month + 1)
+
+    target_q = Q()
+    for yr, mo in period_months:
+        target_q |= Q(year=yr, month=mo)
+
     prop_data = []
     total_confirmed_period = 0
     
@@ -532,19 +571,29 @@ def reports_view(request):
         collected = p.actual_collected or Decimal('0.00')
         total_confirmed_period += collected
         
-        # Calculate Stats
-        tenant_count = Tenant.objects.filter(assigned_property=p).count()
-        efficiency = (collected / p.monthly_revenue * 100) if p.monthly_revenue > 0 else 0
+        # Calculate Target (Invoicing) based on RentCharges billed in this period
+        prop_charges = RentCharge.objects.filter(
+            tenant__assigned_property=p
+        ).filter(target_q)
+        target = prop_charges.aggregate(Sum('amount'))['amount__sum'] or Decimal('0.00')
+
+        # Current occupants (excluding expired, moved-out, and pending)
+        occupied_count = Tenant.objects.filter(
+            assigned_property=p
+        ).exclude(status__in=['expired', 'moved_out', 'pending']).count()
+
+        efficiency = (collected / target * 100) if target > 0 else 0
         
         prop_data.append({
             'name': p.name,
-            'target': p.monthly_revenue,
+            'target': target,
             'collected': collected,
-            'shortfall': p.monthly_revenue - collected,
-            'occupancy': (tenant_count / p.total_units * 100) if p.total_units > 0 else 0,
+            'shortfall': max(Decimal('0.00'), target - collected),
+            'occupancy': (occupied_count / p.total_units * 100) if p.total_units > 0 else 0,
             'efficiency': round(efficiency, 1),
             'total_units': p.total_units,
-            'vacant': p.total_units - tenant_count
+            'vacant': p.total_units - occupied_count,
+            'occupied_count': occupied_count,
         })
 
     # 3. Maintenance Intelligence (Cast to list for JSON/Chart.js safety)
@@ -571,7 +620,7 @@ def reports_view(request):
         'start_date': start_date.strftime('%Y-%m-%d'),
         'end_date': end_date.strftime('%Y-%m-%d'),
         'total_units': my_properties.aggregate(Sum('total_units'))['total_units__sum'] or 0,
-        'total_occupied': all_landlord_tenants.count(),
+        'total_occupied': all_landlord_tenants.exclude(status__in=['expired', 'moved_out', 'pending']).count(),
         'all_tenants_with_balance': all_landlord_tenants.exclude(balance=0).select_related('user', 'assigned_property').order_by('-balance'),
     }
     
@@ -664,6 +713,8 @@ def tenant_dashboard(request):
         'rounded_balance': int(tenant_profile.balance),
         # Extra: Send a count of "In Progress" specifically for the progress bar if needed
         'in_progress_count': active_requests.filter(status='in_progress').count(),
+        # Read-only flag for moved-out tenants
+        'is_readonly': tenant_profile.status in ('approved', 'moved_out', 'expired'),
     }
     
     return render(request, 'tenants/tenant_dashboard.html', context)
@@ -679,6 +730,12 @@ def report_issue(request):
     except Tenant.DoesNotExist:
         messages.error(request, "Error: No tenant profile found for this account.")
         return redirect('login')
+
+    # Read-only guard: moved-out tenants cannot submit new requests
+    READONLY_STATUSES = ('approved', 'moved_out', 'expired')
+    if tenant_profile.status in READONLY_STATUSES:
+        messages.warning(request, "Your tenancy has ended. You can view your history but cannot submit new maintenance requests.")
+        return redirect('tenant_dashboard')
 
     if request.method == 'POST':
         form = TenantMaintenanceRequestForm(request.POST)
@@ -705,6 +762,12 @@ def report_payment(request):
     except Tenant.DoesNotExist:
         messages.error(request, "Error: No tenant profile found for this account.")
         return redirect('login')
+
+    # Read-only guard: moved-out tenants cannot report new payments
+    READONLY_STATUSES = ('approved', 'moved_out', 'expired')
+    if tenant_profile.status in READONLY_STATUSES:
+        messages.warning(request, "Your tenancy has ended. You can view your payment history but cannot report new payments.")
+        return redirect('tenant_dashboard')
 
     if request.method == 'POST':
         form = TenantPaymentForm(request.POST)
@@ -1639,15 +1702,38 @@ def export_revenue_csv(request):
     response = HttpResponse(content_type='text/csv')
     response['Content-Disposition'] = f'attachment; filename="revenue_{start_date}.csv"'
     writer = csv.writer(response)
-    writer.writerow(['Property', 'Monthly Target', 'Collected (In Period)', 'Shortfall', 'Occupancy %'])
+    if isinstance(start_date, str):
+        start_d = datetime.datetime.strptime(start_date, '%Y-%m-%d').date()
+    else:
+        start_d = start_date
+    if isinstance(end_date, str):
+        end_d = datetime.datetime.strptime(end_date, '%Y-%m-%d').date()
+    else:
+        end_d = end_date
+
+    cur = start_d.replace(day=1)
+    period_months = set()
+    while cur <= end_d:
+        period_months.add((cur.year, cur.month))
+        if cur.month == 12:
+            cur = cur.replace(year=cur.year + 1, month=1)
+        else:
+            cur = cur.replace(month=cur.month + 1)
+
+    target_q = Q()
+    for yr, mo in period_months:
+        target_q |= Q(year=yr, month=mo)
+
+    writer.writerow(['Property', 'Target (Invoicing)', 'Collected (In Period)', 'Shortfall', 'Occupancy %'])
     
     for p in Property.objects.filter(landlord=request.user):
         collected = Payment.objects.filter(
             tenant__assigned_property=p, status='confirmed', date__date__range=[start_date, end_date]
-        ).aggregate(Sum('amount'))['amount__sum'] or 0
-        tenant_count = Tenant.objects.filter(assigned_property=p).count()
+        ).aggregate(Sum('amount'))['amount__sum'] or Decimal('0.00')
+        target = RentCharge.objects.filter(tenant__assigned_property=p).filter(target_q).aggregate(Sum('amount'))['amount__sum'] or Decimal('0.00')
+        tenant_count = Tenant.objects.filter(assigned_property=p).exclude(status__in=['expired', 'moved_out', 'pending']).count()
         occ = (tenant_count / p.total_units * 100) if p.total_units > 0 else 0
-        writer.writerow([p.name, p.monthly_revenue, collected, p.monthly_revenue - collected, f"{occ:.1f}%"])
+        writer.writerow([p.name, target, collected, max(Decimal('0.00'), target - collected), f"{occ:.1f}%"])
     return response
 
 # --- 4. ARREARS (DEBTORS) EXPORT ---
@@ -2067,6 +2153,7 @@ def ai_dashboard_insights(request):
         'in_progress_maintenance': maint_qs.filter(status='in_progress').count(),
         'stale_maintenance':       maint_qs.filter(status='pending', date_reported__lt=seven_days_ago).count(),
         'move_out_notices':        Tenant.objects.filter(assigned_property__in=my_properties, status='notice_given').count(),
+        'approved_move_outs':      Tenant.objects.filter(assigned_property__in=my_properties, status='approved').count(),
         'today':                   today.strftime('%B %d, %Y'),
     }
 

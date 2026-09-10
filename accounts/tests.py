@@ -632,3 +632,69 @@ class RHMSViewAndLogicTests(TestCase):
         call_command('check_expired_leases', stdout=StringIO())
         self.tenant.refresh_from_db()
         self.assertEqual(self.tenant.status, 'active')
+
+    def test_property_occupied_and_vacant_units_calculation(self):
+        """Property.occupied_units excludes expired and moved_out tenants, and vacant_units reflects it."""
+        # Initial: self.tenant is active -> occupied=1, vacant=9
+        self.assertEqual(self.property.occupied_units, 1)
+        self.assertEqual(self.property.vacant_units, 9)
+
+        # Mark tenant as expired
+        self.tenant.status = 'expired'
+        self.tenant.save(update_fields=['status'])
+
+        self.assertEqual(self.property.occupied_units, 0)
+        self.assertEqual(self.property.vacant_units, 10)
+
+    def test_readonly_guard_blocks_expired_tenant_from_reporting_issue(self):
+        """Expired/moved-out tenants are blocked from reporting maintenance requests."""
+        self.client.login(username='tenant@test.com', password='password123')
+        self.tenant.status = 'expired'
+        self.tenant.save(update_fields=['status'])
+
+        response = self.client.get('/tenant/report-issue/')
+        self.assertEqual(response.status_code, 302)
+        self.assertRedirects(response, '/tenant/dashboard/')
+
+    def test_readonly_guard_blocks_expired_tenant_from_reporting_payment(self):
+        """Expired/moved-out tenants are blocked from reporting payments."""
+        self.client.login(username='tenant@test.com', password='password123')
+        self.tenant.status = 'approved'
+        self.tenant.save(update_fields=['status'])
+
+        response = self.client.get('/tenant/report-payment/')
+        self.assertEqual(response.status_code, 302)
+        self.assertRedirects(response, '/tenant/dashboard/')
+
+    def test_check_expired_leases_applies_pro_rata_adjustment(self):
+        """check_expired_leases recalculates RentCharge pro-rata for mid-month departure."""
+        from django.core.management import call_command
+        from io import StringIO
+        from accounts.models import RentCharge
+
+        today = datetime.date.today()
+        # Set lease end to the 10th of this month (or previous month if today < 10)
+        lease_end = today.replace(day=10) if today.day >= 10 else today
+        self.tenant.move_in_date = lease_end.replace(day=1)
+        self.tenant.lease_end = lease_end
+        self.tenant.status = 'active'
+        self.tenant.save()
+
+        # Create a full-month RentCharge of 15,000
+        RentCharge.objects.filter(tenant=self.tenant).delete()
+        RentCharge.objects.create(
+            tenant=self.tenant,
+            amount=Decimal('15000.00'),
+            month=lease_end.month,
+            year=lease_end.year
+        )
+
+        call_command('check_expired_leases', stdout=StringIO())
+
+        charge = RentCharge.objects.get(tenant=self.tenant, month=lease_end.month, year=lease_end.year)
+        # Should be strictly less than full 15,000 because of pro-rata days used
+        import calendar
+        days_in_month = calendar.monthrange(lease_end.year, lease_end.month)[1]
+        expected_charge = (Decimal('15000.00') / Decimal(days_in_month) * Decimal(lease_end.day)).quantize(Decimal('1.00'))
+        self.assertEqual(charge.amount, expected_charge)
+

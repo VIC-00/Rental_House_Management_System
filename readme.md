@@ -75,11 +75,11 @@ Ensure the following are installed:
 
 ### 4. Configure Environment Variables
 
-Create a `.env` file in the project root (same folder as `manage.py`):
+Copy the example environment file:
 
-    touch .env
+    cp .env.example .env
 
-Add the following to `.env`:
+Open `.env` and verify/add your keys:
 
     SECRET_KEY=your-very-long-random-secret-key-here
     GEMINI_API_KEY=your-google-gemini-api-key-here
@@ -104,7 +104,7 @@ Add the following to `.env`:
 
 Follow the prompts to set your username, email, and password.
 
-### 3. Assign the Landlord Role
+### 3. Assign the Landlord Role & Approval
 
     python3 manage.py runserver
 
@@ -115,6 +115,7 @@ Open your browser and go to:
 - Log in with your superuser account  
 - Under **Users**, locate your account  
 - Change **Role** to **Landlord**  
+- Check the **Is approved** box (required for landlord access)  
 - Click **Save**
 
 ---

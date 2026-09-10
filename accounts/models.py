@@ -67,9 +67,12 @@ class Property(models.Model):
         return self.name
 
     @property
+    def occupied_units(self):
+        return Tenant.objects.filter(assigned_property=self).exclude(status__in=['expired', 'moved_out', 'pending']).count()
+
+    @property
     def vacant_units(self):
-        occupied = Tenant.objects.filter(assigned_property=self).count()
-        return self.total_units - occupied
+        return self.total_units - self.occupied_units
 
 # ==============================================================================
 # --- 3. TENANCY & FINANCIALS ---
@@ -219,10 +222,18 @@ class Tenant(models.Model):
         # ==========================================
         if is_creation:
             if not self.initial_rent_charged:
-                # Calculate remaining days in their move-in month
                 days_in_month = calendar.monthrange(self.move_in_date.year, self.move_in_date.month)[1]
-                days_stayed = (days_in_month - self.move_in_date.day) + 1
-                
+
+                # ⭐ If lease ends within the same month as move-in,
+                # only charge for the days actually occupied (move-in → lease_end).
+                # Otherwise charge from move-in to end of month as usual.
+                if (self.lease_end
+                        and self.lease_end.month == self.move_in_date.month
+                        and self.lease_end.year == self.move_in_date.year):
+                    days_stayed = (self.lease_end - self.move_in_date).days + 1
+                else:
+                    days_stayed = (days_in_month - self.move_in_date.day) + 1
+
                 if days_stayed > 0:
                     daily_rate = Decimal(str(self.rent_amount)) / Decimal(days_in_month)
                     amount_to_charge = (daily_rate * Decimal(days_stayed)).quantize(Decimal('1.00'))
@@ -238,6 +249,7 @@ class Tenant(models.Model):
                     # Lock the initial charge flag so the script doesn't double bill them
                     self.initial_rent_charged = True
                     self.save(update_fields=['initial_rent_charged'])
+
 
             # Calculate and cache their starting profile balance right away
             self.update_balance()

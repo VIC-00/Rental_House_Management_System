@@ -28,10 +28,8 @@ build/
 
 #Extras
 ANALYSIS_REPORT.md
-0001_initial.py
 
 # Environment variables (contains secret API keys — never commit this)
 .env
 .env.*.cache/
 .cache/
-accounts/migrations/0002_*.py

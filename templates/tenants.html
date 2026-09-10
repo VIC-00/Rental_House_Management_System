@@ -6,15 +6,30 @@
         <a href="{% url 'add_tenant' %}" class="btn btn-primary" style="text-decoration: none; font-weight: 700;">+ Add New Tenant</a>
         <a href="{% url 'export_tenants_csv' %}?{{ request.GET.urlencode }}" class="btn btn-secondary" style="text-decoration: none;">Export Tenant List</a>
     </div>
-
     <div class="stats-grid">
-        <div class="stat-card"><h3>Total Tenants</h3><div class="stat-value">{{ tenants.count }}</div><div class="stat-subtitle">Active leases</div></div>
+        <div class="stat-card">
+            <h3>Total Tenants</h3>
+            <div class="stat-value">{{ tenants.count }}</div>
+            <div class="stat-subtitle">
+                {% if expired_count > 0 %}
+                    {{ active_count }} active &bull; {{ expired_count }} expired
+                {% else %}
+                    {{ active_count }} active lease{{ active_count|pluralize }}
+                {% endif %}
+            </div>
+        </div>
         <div class="stat-card"><h3>Good Standing</h3><div class="stat-value">{{ standing_count }}</div><div class="stat-subtitle">No overdue payments</div></div>
         <div class="stat-card"><h3>Overdue</h3><div class="stat-value" style="color: #e74c3c;">{{ overdue_count }}</div><div class="stat-subtitle">Payment pending</div></div>
-        <div class="stat-card" {% if move_out_notices > 0 %}style="border-left: 5px solid #f39c12;"{% endif %}>
+        <div class="stat-card" {% if move_out_notices > 0 %}style="border-left: 5px solid #f39c12;"{% elif approved_move_outs > 0 %}style="border-left: 5px solid #2ecc71;"{% endif %}>
             <h3>Move-Out Notices</h3>
-            <div class="stat-value" {% if move_out_notices > 0 %}style="color: #f39c12;"{% endif %}>{{ move_out_notices|default:0 }}</div>
-            <div class="stat-subtitle">Awaiting review</div>
+            <div class="stat-value" {% if move_out_notices > 0 %}style="color: #f39c12;"{% elif approved_move_outs > 0 %}style="color: #2ecc71;"{% endif %}>{{ move_out_notices|default:0 }}</div>
+            <div class="stat-subtitle">
+                {% if approved_move_outs > 0 %}
+                    {{ move_out_notices }} pending &bull; {{ approved_move_outs }} approved
+                {% else %}
+                    Awaiting review
+                {% endif %}
+            </div>
         </div>
     </div>
 
@@ -114,8 +129,12 @@
                                 <span class="badge" style="background: #f39c12;">Notice Given</span>
                             {% elif tenant.status == 'approved' %}
                                 <span class="badge badge-success">Move-Out Appr.</span>
+                            {% elif tenant.status == 'expired' %}
+                                <span class="badge" style="background: #95a5a6;">Expired</span>
+                            {% elif tenant.status == 'moved_out' %}
+                                <span class="badge" style="background: #7f8c8d;">Moved Out</span>
                             {% elif tenant.balance <= 0 %}
-                                <span class="badge badge-success">Active</span>
+                                <span class="badge badge-success">Good Standing</span>
                             {% else %}
                                 <span class="badge badge-warning">Overdue</span>
                             {% endif %}
